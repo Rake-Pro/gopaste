@@ -61,7 +61,7 @@ type Config struct {
 func Defaults() Config {
 	return Config{
 		Host:         "0.0.0.0",
-		Port:         7777,
+		Port:         8080,
 		KeyLength:    10,
 		MaxLength:    400000,
 		StaticMaxAge: 86400,

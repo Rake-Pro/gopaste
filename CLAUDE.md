@@ -40,11 +40,11 @@ with assets embedded.
 
 `STORAGE_TYPE` (postgres|sqlite|file), `DATABASE_URL` or
 `STORAGE_{HOST,PORT,DB,USERNAME,PASSWORD}`, `STORAGE_EXPIRE_SECONDS`,
-`STORAGE_FILEPATH`, `PORT` (7777), `HOST`, `LOG_LEVEL`. See `config.example.yaml`.
+`STORAGE_FILEPATH`, `PORT` (8080), `HOST`, `LOG_LEVEL`. See `config.example.yaml`.
 
 ## Build, run, release
 
-- Local: `go run ./cmd/gopaste` (file backend in `./data` on :7777) or
+- Local: `go run ./cmd/gopaste` (file backend in `./data` on :8080) or
   `go build -o bin/gopaste ./cmd/gopaste`. Tests: `go test ./...`.
 - Image CI (`.github/workflows/build-image.yml`): builds **amd64**, pushes to
   **GHCR** `ghcr.io/rake-pro/gopaste` via the built-in `GITHUB_TOKEN`. `VERSION`

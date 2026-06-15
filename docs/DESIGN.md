@@ -90,7 +90,7 @@ consumers.
 
 | Key              | Default  | Notes                                       |
 |------------------|----------|---------------------------------------------|
-| port             | 7777     | overridable by `PORT`                       |
+| port             | 8080     | overridable by `PORT`                       |
 | host             | 0.0.0.0  | overridable by `HOST`                       |
 | keyLength        | 10       |                                             |
 | maxLength        | 400000   | bytes (~390 KB)                             |
