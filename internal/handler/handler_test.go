@@ -112,6 +112,14 @@ func TestMaxLength(t *testing.T) {
 	}
 }
 
+func TestEmptyBodyRejected(t *testing.T) {
+	srv := newTestServer(t)
+	code, body := post(t, srv.URL, "   \n\t ")
+	if code != 400 || !strings.Contains(body, "cannot be empty") {
+		t.Fatalf("empty body = %d %s, want 400 cannot be empty", code, body)
+	}
+}
+
 func TestAboutPreloaded(t *testing.T) {
 	srv := newTestServer(t)
 	code, _, raw := get(t, srv.URL+"/raw/about")
