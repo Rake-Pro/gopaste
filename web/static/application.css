@@ -1,0 +1,203 @@
+/* ============================================================
+   gopaste - rake brand frontend
+   All color is token-driven. The base "rake" theme lives on
+   :root; alternate themes override under [data-theme="..."].
+   The markup references only tokens, so a new theme is a token
+   block - no structural changes.
+   ============================================================ */
+
+:root,
+[data-theme="rake"] {
+  --navy-900:#060f18; --navy-800:#0a1622; --navy-700:#0f2236;
+  --steel-100:#eaf4ff; --steel-300:#bcd6ee; --steel-400:#7fb0e0;
+  --steel-500:#3f7fc0; --steel-700:#1b4377;
+  --green:#8a9145; --green-bright:#b6c25a;
+  --ink:#cfe0f0; --ink-dim:#8aa3bd; --ink-faint:#5b7088;
+  --glow:rgba(86,156,224,.45);
+  --line:rgba(127,176,224,.16);
+  --line-strong:rgba(127,176,224,.40);
+  --panel:linear-gradient(180deg,rgba(15,34,54,.78),rgba(10,22,34,.82));
+  --bg:
+    radial-gradient(1100px 640px at 50% -12%,rgba(63,127,192,.18),transparent 60%),
+    radial-gradient(900px 700px at 50% 118%,rgba(27,67,119,.24),transparent 55%),
+    linear-gradient(180deg,var(--navy-800) 0%,var(--navy-900) 100%);
+  --grid-ink:rgba(127,176,224,.05);
+  --code-bg:rgba(6,15,24,.35);
+  --danger:#c0556a;
+
+  --syn-key:#7fb0e0; --syn-str:#b6c25a; --syn-num:#57b6ff;
+  --syn-com:#5b7088; --syn-fn:#eaf4ff; --syn-punc:#8aa3bd;
+
+  --font-display:'Chakra Petch',system-ui,sans-serif;
+  --font-body:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
+}
+
+/* Alternate light theme - proves the token system. */
+[data-theme="arctic"] {
+  --navy-900:#dfe9f3; --navy-800:#eef4fa; --navy-700:#ffffff;
+  --steel-100:#0a1622; --steel-300:#1b4377; --steel-400:#3f7fc0;
+  --steel-500:#2f6bb0; --steel-700:#bcd6ee;
+  --green:#6f7a2a; --green-bright:#566321;
+  --ink:#16273a; --ink-dim:#46607c; --ink-faint:#7e93a9;
+  --glow:rgba(63,127,192,.25);
+  --line:rgba(31,67,119,.16);
+  --line-strong:rgba(31,67,119,.34);
+  --panel:linear-gradient(180deg,rgba(255,255,255,.92),rgba(238,244,250,.92));
+  --bg:
+    radial-gradient(1100px 640px at 50% -12%,rgba(63,127,192,.14),transparent 60%),
+    linear-gradient(180deg,#eef4fa 0%,#dfe9f3 100%);
+  --grid-ink:rgba(31,67,119,.05);
+  --code-bg:rgba(255,255,255,.6);
+  --syn-key:#2f6bb0; --syn-str:#566321; --syn-num:#1c6fb0;
+  --syn-com:#7e93a9; --syn-fn:#16273a; --syn-punc:#46607c;
+}
+
+*{box-sizing:border-box;}
+html,body{height:100%;margin:0;}
+body{
+  font-family:var(--font-body);
+  color:var(--ink);
+  background:var(--bg);
+  background-attachment:fixed;
+  overflow:hidden; /* the editor scrolls, not the page */
+}
+
+.grid-overlay{
+  position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(var(--grid-ink) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid-ink) 1px,transparent 1px);
+  background-size:46px 46px;
+  mask-image:radial-gradient(ellipse 85% 75% at 50% 30%,#000 35%,transparent 100%);
+}
+.scanline{
+  position:fixed;inset:0;pointer-events:none;z-index:1;opacity:.22;mix-blend-mode:overlay;
+  background:repeating-linear-gradient(to bottom,transparent 0,transparent 2px,rgba(6,15,24,.18) 3px,transparent 4px);
+}
+
+/* ---- app shell ---- */
+.app{
+  position:relative;z-index:2;
+  height:100vh;display:flex;flex-direction:column;
+}
+
+/* ---- HUD command bar ---- */
+.cmdbar{
+  display:flex;align-items:center;gap:18px;padding:11px 18px;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,rgba(15,34,54,.45),rgba(10,22,34,.15));
+  backdrop-filter:blur(6px);
+}
+.cmd-brand{display:flex;align-items:center;gap:10px;}
+.cmd-mark{
+  width:28px;height:28px;border-radius:6px;display:grid;place-items:center;
+  border:1px solid var(--line-strong);
+  background:radial-gradient(circle at 30% 25%,rgba(63,127,192,.45),rgba(10,22,34,.7));
+  font-family:var(--font-display);font-weight:700;color:var(--steel-100);font-size:1rem;
+  box-shadow:0 0 14px rgba(63,127,192,.25);
+}
+.cmd-name{font-family:var(--font-display);font-weight:600;letter-spacing:.04em;color:var(--steel-100);font-size:1rem;}
+.cmd-name span{color:var(--steel-500);}
+.cmd-actions{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap;}
+
+.btn{
+  display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none;
+  font-family:var(--font-display);font-weight:500;font-size:.8rem;letter-spacing:.02em;
+  padding:7px 13px;border-radius:7px;color:var(--ink);
+  background:var(--panel);border:1px solid var(--line);
+  transition:transform .14s ease,border-color .2s ease,box-shadow .2s ease,opacity .2s ease;
+}
+.btn .ic{width:14px;height:14px;stroke:var(--steel-400);fill:none;stroke-width:1.8;}
+.btn:hover{transform:translateY(-1px);border-color:var(--line-strong);box-shadow:0 6px 20px rgba(6,15,24,.5),0 0 14px var(--glow);}
+.btn:focus-visible{outline:2px solid var(--steel-400);outline-offset:2px;}
+.btn.primary{
+  color:#08131f;background:linear-gradient(180deg,var(--steel-300),var(--steel-500));
+  border-color:var(--steel-400);box-shadow:0 4px 18px rgba(63,127,192,.32);
+}
+.btn.primary .ic{stroke:#08131f;}
+.btn.success{color:#0c1607;background:linear-gradient(180deg,var(--green-bright),var(--green));border-color:var(--green-bright);}
+.btn.success .ic{stroke:#0c1607;}
+.btn.disabled{opacity:.32;cursor:not-allowed;pointer-events:none;}
+.btn kbd{
+  font-family:var(--font-mono);font-size:.66rem;color:var(--ink-faint);
+  border:1px solid var(--line);border-radius:3px;padding:0 4px;margin-left:2px;
+}
+
+/* ---- editor body ---- */
+.editor{
+  flex:1 1 auto;min-height:0;
+  display:grid;grid-template-columns:58px 1fr;
+  font-family:var(--font-mono);font-size:13.5px;line-height:1.55;
+}
+.gutter{
+  text-align:right;padding:16px 12px 16px 0;color:var(--ink-faint);
+  border-right:1px solid var(--line);background:var(--code-bg);
+  user-select:none;white-space:pre;overflow:hidden;
+}
+.gutter.prompt{color:var(--steel-500);}
+.codewrap{position:relative;min-width:0;}
+#box,#editor{
+  position:absolute;inset:0;width:100%;height:100%;margin:0;
+  padding:16px 20px;border:0;outline:none;resize:none;
+  font-family:var(--font-mono);font-size:13.5px;line-height:1.55;
+  background:transparent;color:var(--steel-100);tab-size:2;
+}
+#box{overflow:auto;white-space:pre;}
+#editor{white-space:pre;overflow:auto;caret-color:var(--steel-400);}
+#editor::placeholder{color:var(--ink-faint);font-style:italic;}
+
+/* ---- status bar ---- */
+.statusbar{
+  display:flex;align-items:center;border-top:1px solid var(--line);
+  background:rgba(6,15,24,.55);font-family:var(--font-mono);font-size:.72rem;color:var(--ink-dim);
+}
+[data-theme="arctic"] .statusbar{background:rgba(255,255,255,.6);}
+.statusbar .seg{padding:7px 14px;border-right:1px solid var(--line);display:flex;align-items:center;gap:7px;white-space:nowrap;}
+.statusbar .seg[hidden]{display:none;}
+.statusbar .seg b{color:var(--steel-300);font-weight:500;}
+.statusbar .mode{color:#0c1607;background:var(--green);font-weight:700;letter-spacing:.1em;}
+.statusbar .mode.view{background:var(--steel-500);color:#08131f;}
+.statusbar .spacer{flex:1;}
+.statusbar .theme{border-right:none;border-left:1px solid var(--line);}
+.theme-btn{
+  font-family:var(--font-mono);font-size:.72rem;color:var(--ink-dim);
+  background:none;border:0;cursor:pointer;padding:0;letter-spacing:.04em;
+}
+.theme-btn:hover{color:var(--steel-300);}
+.led{width:7px;height:7px;border-radius:50%;background:var(--green-bright);box-shadow:0 0 8px var(--green-bright);}
+.led.blue{background:var(--steel-400);box-shadow:0 0 8px var(--steel-400);}
+
+/* ---- toast messages ---- */
+#messages{position:fixed;left:50%;bottom:54px;transform:translateX(-50%);z-index:6;margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;align-items:center;}
+#messages li{
+  display:inline-flex;align-items:center;gap:10px;padding:9px 16px;border-radius:8px;
+  font-family:var(--font-body);font-size:.84rem;
+  background:rgba(15,34,54,.96);border:1px solid var(--line-strong);color:var(--steel-100);
+  box-shadow:0 8px 30px rgba(0,0,0,.5);
+}
+[data-theme="arctic"] #messages li{background:rgba(255,255,255,.97);color:#0a1622;}
+#messages li::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--steel-400);box-shadow:0 0 8px var(--steel-400);}
+#messages li.info::before{background:var(--green-bright);box-shadow:0 0 8px var(--green-bright);}
+#messages li.error{border-color:var(--danger);}
+#messages li.error::before{background:var(--danger);box-shadow:0 0 8px var(--danger);}
+
+/* ---- tactical syntax theme (highlight.js token classes) ---- */
+.hljs{color:var(--steel-100);background:transparent;}
+.hljs-comment,.hljs-quote{color:var(--syn-com);font-style:italic;}
+.hljs-keyword,.hljs-selector-tag,.hljs-built_in,.hljs-type,.hljs-tag,.hljs-meta-keyword{color:var(--syn-key);}
+.hljs-string,.hljs-regexp,.hljs-addition,.hljs-attribute,.hljs-meta-string{color:var(--syn-str);}
+.hljs-number,.hljs-literal,.hljs-variable,.hljs-template-variable,.hljs-symbol,.hljs-bullet{color:var(--syn-num);}
+.hljs-title,.hljs-section,.hljs-name,.hljs-selector-id,.hljs-selector-class{color:var(--syn-fn);font-weight:500;}
+.hljs-params,.hljs-meta,.hljs-attr,.hljs-punctuation{color:var(--syn-punc);}
+.hljs-deletion{color:var(--danger);}
+.hljs-emphasis{font-style:italic;}
+.hljs-strong{font-weight:700;}
+
+@media (prefers-reduced-motion:reduce){.btn{transition:none;}}
+
+@media (max-width:560px){
+  .cmd-actions .btn kbd{display:none;}
+  .editor{grid-template-columns:42px 1fr;font-size:12.5px;}
+  .statusbar .hint{display:none;}
+}

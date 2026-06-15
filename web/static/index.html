@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="rake">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>gopaste</title>
+  <meta name="robots" content="noindex,nofollow"/>
+  <link rel="icon" href="favicon.ico"/>
+  <link rel="stylesheet" href="fonts.css"/>
+  <link rel="stylesheet" href="application.css"/>
+</head>
+<body>
+  <div class="grid-overlay"></div>
+  <div class="scanline"></div>
+  <ul id="messages"></ul>
+
+  <div class="app">
+    <header class="cmdbar">
+      <div class="cmd-brand">
+        <span class="cmd-mark">R</span>
+        <span class="cmd-name">go<span>paste</span></span>
+      </div>
+      <nav class="cmd-actions">
+        <button class="btn primary disabled" data-act="save" type="button">
+          <svg class="ic" viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M9 4v5h6"/></svg>
+          <span class="lbl">Save</span> <kbd>Ctrl S</kbd>
+        </button>
+        <button class="btn disabled" data-act="new" type="button">New <kbd>Ctrl N</kbd></button>
+        <button class="btn disabled" data-act="duplicate" type="button">Duplicate <kbd>Ctrl D</kbd></button>
+        <button class="btn disabled" data-act="raw" type="button">Raw</button>
+        <button class="btn disabled" data-act="copy" type="button">
+          <svg class="ic" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1"/><path d="M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1"/></svg>
+          Copy link
+        </button>
+      </nav>
+    </header>
+
+    <main class="editor">
+      <div class="gutter prompt" id="linenos">&gt;</div>
+      <div class="codewrap">
+        <pre id="box" class="hljs" tabindex="0" style="display:none;"><code></code></pre>
+        <textarea id="editor" spellcheck="false" placeholder="// paste or type, then Ctrl+S to save"></textarea>
+      </div>
+    </main>
+
+    <footer class="statusbar">
+      <span class="seg mode" id="st-mode">NEW</span>
+      <span class="seg" id="st-key" hidden></span>
+      <span class="seg" id="st-lang" hidden></span>
+      <span class="seg" id="st-count">0 lines / 0 chars</span>
+      <span class="seg hint" id="st-hint">Ctrl+S to save</span>
+      <span class="spacer"></span>
+      <span class="seg theme"><button class="theme-btn" id="themeBtn" type="button">theme: rake</button></span>
+    </footer>
+  </div>
+
+  <script src="highlight.min.js"></script>
+  <script src="application.js"></script>
+</body>
+</html>

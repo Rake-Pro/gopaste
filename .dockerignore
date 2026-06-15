@@ -1,0 +1,15 @@
+# Keep the build context lean and reproducible.
+.git
+.github
+bin/
+out/
+data/
+.testdata/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.srv.log
+docs/mocks
+*.md
+.gitignore
