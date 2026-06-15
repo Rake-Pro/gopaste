@@ -22,15 +22,15 @@ for history.
 ## Quick start
 
 ```
-go run ./cmd/gopaste            # file backend in ./data on :7777
+go run ./cmd/gopaste            # file backend in ./data on :8080
 ```
 
 Create and read a paste:
 
 ```
-key=$(curl -s --data 'hello' localhost:7777/documents | sed 's/.*"key":"//;s/".*//')
-curl -s localhost:7777/documents/$key    # {"data":"hello","key":"..."}
-curl -s localhost:7777/raw/$key          # hello
+key=$(curl -s --data 'hello' localhost:8080/documents | sed 's/.*"key":"//;s/".*//')
+curl -s localhost:8080/documents/$key    # {"data":"hello","key":"..."}
+curl -s localhost:8080/raw/$key          # hello
 ```
 
 ## HTTP API

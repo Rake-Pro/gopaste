@@ -3,7 +3,7 @@
 # (so the deployment's injected secrets stay authoritative). See the env column.
 
 host: "0.0.0.0"        # HOST
-port: 7777             # PORT
+port: 8080             # PORT
 logLevel: "info"       # LOG_LEVEL (debug|info|warn|error)
 
 keyLength: 10
