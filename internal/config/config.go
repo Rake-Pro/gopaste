@@ -22,6 +22,10 @@ type Storage struct {
 	URL      string `yaml:"url"`      // full postgres DSN; overrides parts when set
 	Path     string `yaml:"path"`     // file dir / sqlite file path
 	Expire   int    `yaml:"expire"`   // seconds; 0 disables expiration
+
+	// ExpireDays is a convenience: when > 0 it sets Expire to ExpireDays*86400,
+	// overriding Expire. Resolved in Load.
+	ExpireDays int `yaml:"expireDays"`
 }
 
 // KeyGenerator selects the paste-key generation strategy.
@@ -100,6 +104,11 @@ func Load(path string) (Config, error) {
 	}
 
 	applyEnv(&cfg)
+
+	// ExpireDays is a convenience that overrides Expire (seconds) when set.
+	if cfg.Storage.ExpireDays > 0 {
+		cfg.Storage.Expire = cfg.Storage.ExpireDays * 86400
+	}
 	return cfg, nil
 }
 
@@ -120,6 +129,7 @@ func applyEnv(cfg *Config) {
 	setStr(&cfg.Storage.URL, "DATABASE_URL")
 	setStr(&cfg.Storage.Path, "STORAGE_FILEPATH")
 	setInt(&cfg.Storage.Expire, "STORAGE_EXPIRE_SECONDS")
+	setInt(&cfg.Storage.ExpireDays, "STORAGE_EXPIRE_DAYS")
 }
 
 func setStr(dst *string, env string) {

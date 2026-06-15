@@ -35,6 +35,8 @@ storage:
   user: ""             # STORAGE_USERNAME
   password: ""         # STORAGE_PASSWORD
   expire: 0            # STORAGE_EXPIRE_SECONDS; 0 = pastes never expire
+  expireDays: 0        # STORAGE_EXPIRE_DAYS; convenience, overrides expire when >0
+                       # (sliding TTL: postgres/sqlite bump expiry on read)
 
   # --- sqlite / file ---
   path: ""             # STORAGE_FILEPATH: sqlite db file, or file-store directory

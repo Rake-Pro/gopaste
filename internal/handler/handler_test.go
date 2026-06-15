@@ -112,6 +112,32 @@ func TestMaxLength(t *testing.T) {
 	}
 }
 
+func TestCrossSiteBlocked(t *testing.T) {
+	srv := newTestServer(t)
+	mk := func(site string) int {
+		req, _ := http.NewRequest("POST", srv.URL+"/documents", strings.NewReader("payload"))
+		req.Header.Set("Content-Type", "text/plain")
+		if site != "" {
+			req.Header.Set("Sec-Fetch-Site", site)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if got := mk("cross-site"); got != 403 {
+		t.Fatalf("cross-site POST = %d, want 403", got)
+	}
+	if got := mk("same-origin"); got != 200 {
+		t.Fatalf("same-origin POST = %d, want 200", got)
+	}
+	if got := mk(""); got != 200 { // curl / API client (no header)
+		t.Fatalf("no-header POST = %d, want 200", got)
+	}
+}
+
 func TestEmptyBodyRejected(t *testing.T) {
 	srv := newTestServer(t)
 	code, body := post(t, srv.URL, "   \n\t ")
