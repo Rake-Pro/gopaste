@@ -127,6 +127,13 @@ func (h *Handler) handleRawGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handlePost(w http.ResponseWriter, r *http.Request) {
+	// CSRF: block cross-site browser-initiated writes. Modern browsers always
+	// send Sec-Fetch-Site; non-browser clients (curl, API) send nothing and are
+	// allowed, as are same-origin/same-site requests.
+	if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+		writeJSON(w, r, http.StatusForbidden, map[string]string{"message": "Cross-site request blocked."})
+		return
+	}
 	data, ok := h.readBody(w, r)
 	if !ok {
 		return

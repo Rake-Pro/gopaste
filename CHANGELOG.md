@@ -25,6 +25,10 @@ Versioning aims to follow [Semantic Versioning](https://semver.org/).
   - Frontend status bar builds nodes via textContent (no innerHTML) so
     URL-derived key/lang can never be interpreted as markup.
   - Go toolchain pinned to 1.25.11; govulncheck reports 0 reachable vulnerabilities.
+  - CSRF: `POST /documents` blocks cross-site browser requests via
+    `Sec-Fetch-Site` (curl/API clients and same-origin requests unaffected).
+  - Storage growth: `STORAGE_EXPIRE_DAYS` convenience setting (overrides
+    `STORAGE_EXPIRE_SECONDS`) so pastes can auto-expire (sliding TTL on read).
 
 ### Added
 - Initial release of gopaste: a small, self-hosted pastebin as a single static
