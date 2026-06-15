@@ -45,8 +45,8 @@ Mocks tracked in `docs/mocks/` (viewable via report-viewer). See `docs/mocks/REA
 ## Security follow-ups (post-review residual risk)
 - [x] Reject empty pastes; XFF-spoof-proof client IP (trustedProxyCount);
       random/16 keys; keys out of logs; CSP; server timeouts; Go 1.25.11
-- [ ] Set `TRUSTED_PROXY_COUNT` in the deployment to match the proxy chain, and
-      ensure the edge (NPM) forwards the real client IP via X-Forwarded-For
+- [x] Set `TRUSTED_PROXY_COUNT=2` (NPM + Traefik) and make Traefik trust NPM's
+      X-Forwarded-For (entrypoint trustedIPs) so real client IPs reach the app
 - [ ] Storage growth: no quota/expiration. Consider STORAGE_EXPIRE_SECONDS
       (sliding TTL) and/or a per-client write quota for the public instance
 - [ ] CSRF on POST /documents: accepted as low risk (no cross-origin read, no

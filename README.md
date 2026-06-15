@@ -1,7 +1,7 @@
 # gopaste
 
 A small, dependency-light pastebin written in Go. It serves a single static
-binary - HTTP API, pluggable storage, and an embedded brand-themed frontend -
+binary - HTTP API, pluggable storage, and an embedded themeable frontend -
 with no external runtime dependencies.
 
 See [`docs/DESIGN.md`](docs/DESIGN.md) for the architecture and API contract,
@@ -17,7 +17,8 @@ for history.
 - Per-client rate limiting, security headers, paste size limits.
 - Single static binary, embedded frontend, distroless image.
 - Structured logging via zerolog.
-- Token-themed vanilla-JS frontend (no framework, no CDN) with a theme switcher.
+- Vanilla-JS frontend (no framework, no CDN); themes are CSS-token blocks with a
+  built-in switcher, so it's easy to restyle or add your own.
 
 ## Quick start
 
@@ -56,8 +57,10 @@ Configuration is read from an optional YAML file (`--config path` or
 | `DATABASE_URL` | full postgres DSN (or use the parts below) |
 | `STORAGE_HOST` / `STORAGE_PORT` / `STORAGE_DB` / `STORAGE_USERNAME` / `STORAGE_PASSWORD` | postgres parts |
 | `STORAGE_EXPIRE_SECONDS` | sliding TTL in seconds (`0` = never) |
+| `STORAGE_EXPIRE_DAYS` | sliding TTL in days; overrides `STORAGE_EXPIRE_SECONDS` |
 | `STORAGE_FILEPATH` | sqlite db file or file-store directory |
 | `PORT` / `HOST` / `LOG_LEVEL` | server bind + log level |
+| `TRUSTED_PROXY_COUNT` | number of trusted reverse proxies in front (see below) |
 
 ### Storage backends
 
@@ -65,6 +68,17 @@ Configuration is read from an optional YAML file (`--config path` or
   (idempotent). Just create the database + role; the app does the rest.
 - `sqlite`: single local file, table auto-created. Pure-Go driver, no CGO.
 - `file`: one file per paste; no expiration.
+
+### Behind a reverse proxy
+
+Paste keys are unguessable capability URLs and the rate limiter is per client
+IP. To get the real client IP (for logging and rate limiting) when running
+behind proxies, set `TRUSTED_PROXY_COUNT` to the number of trusted proxies in
+front of the app. The client IP is then read as the Nth-from-rightmost
+`X-Forwarded-For` entry (anything further left is client-controllable and
+ignored, so it can't be spoofed). `0` (default) trusts no `X-Forwarded-For` and
+uses the direct connection IP. Your proxies must actually forward
+`X-Forwarded-For` for this to surface real clients.
 
 ## Build
 
