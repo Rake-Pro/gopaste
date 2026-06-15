@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="rake">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>gopaste - implemented UI snapshot</title>
+
+<!-- Self-hosted fonts (relative to this snapshot, served by the report viewer). -->
+<style>
+@font-face{font-family:'Chakra Petch';font-style:normal;font-weight:500;font-display:swap;src:url('../../web/static/fonts/chakra-petch-500.woff2') format('woff2');}
+@font-face{font-family:'Chakra Petch';font-style:normal;font-weight:600;font-display:swap;src:url('../../web/static/fonts/chakra-petch-600.woff2') format('woff2');}
+@font-face{font-family:'Chakra Petch';font-style:normal;font-weight:700;font-display:swap;src:url('../../web/static/fonts/chakra-petch-700.woff2') format('woff2');}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400;font-display:swap;src:url('../../web/static/fonts/jetbrains-mono-400.woff2') format('woff2');}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:500;font-display:swap;src:url('../../web/static/fonts/jetbrains-mono-500.woff2') format('woff2');}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:700;font-display:swap;src:url('../../web/static/fonts/jetbrains-mono-700.woff2') format('woff2');}
+</style>
+
+<!-- The REAL implemented stylesheet, so this snapshot never drifts from the app. -->
+<link rel="stylesheet" href="../../web/static/application.css"/>
+
+<!-- Snapshot-only overrides: the live app is full-viewport; here we show stacked frames. -->
+<style>
+  html,body{height:auto;overflow:auto;}
+  .page{position:relative;z-index:2;max-width:1080px;margin:0 auto;padding:44px 24px 90px;}
+  .masthead{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px;}
+  .masthead h1{font-family:var(--font-display);font-weight:700;font-size:2.3rem;letter-spacing:.02em;margin:0;
+    background:linear-gradient(180deg,var(--steel-100),var(--steel-400));-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .masthead h1 b{background:linear-gradient(180deg,var(--steel-400),var(--steel-500));-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .masthead .tag{font-family:var(--font-display);font-size:.7rem;letter-spacing:.3em;text-transform:uppercase;color:var(--ink-dim);border:1px solid var(--line);padding:5px 11px;border-radius:4px;}
+  .lede{color:var(--ink-dim);max-width:74ch;font-size:.92rem;line-height:1.6;margin:0 0 8px;}
+  .lede code{font-family:var(--font-mono);color:var(--steel-300);font-size:.85em;}
+  .cap{font-family:var(--font-display);font-weight:600;font-size:.74rem;letter-spacing:.2em;text-transform:uppercase;color:var(--steel-400);margin:34px 0 12px;display:flex;align-items:center;gap:12px;}
+  .cap::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line-strong),transparent);}
+  .snap .app{height:auto;border:1px solid var(--line-strong);border-radius:12px;overflow:hidden;box-shadow:0 22px 60px rgba(0,0,0,.5);}
+  .snap .editor{height:296px;}
+  .titlebar{display:flex;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line);background:var(--code-bg);}
+  .titlebar .dot{width:11px;height:11px;border-radius:50%;}
+  .titlebar .dot.r{background:#c0556a;}.titlebar .dot.y{background:var(--green);}.titlebar .dot.g{background:var(--steel-500);}
+  .titlebar .url{margin-left:12px;font-family:var(--font-mono);font-size:.74rem;color:var(--ink-faint);}
+  .titlebar .url b{color:var(--steel-300);}
+  .foot{margin-top:42px;padding-top:16px;border-top:1px solid var(--line);font-family:var(--font-mono);font-size:.72rem;color:var(--ink-faint);display:flex;gap:18px;flex-wrap:wrap;}
+</style>
+</head>
+<body>
+<div class="grid-overlay"></div>
+<div class="scanline"></div>
+
+<div class="page">
+  <div class="masthead">
+    <h1>go<b>paste</b></h1>
+    <span class="tag">Implemented // snapshot</span>
+  </div>
+  <p class="lede">Static render of the shipped frontend. This page links the actual <code>web/static/application.css</code> and self-hosted fonts, so it reflects the real implementation, not a separate mock. Markup uses the same classes the live app renders.</p>
+
+  <!-- STATE A -->
+  <div class="cap">State A - new paste (edit mode)</div>
+  <div class="snap">
+    <div class="app">
+      <div class="titlebar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">paste.rake.pro<b>/</b></span></div>
+      <header class="cmdbar">
+        <div class="cmd-brand"><span class="cmd-mark">R</span><span class="cmd-name">go<span>paste</span></span></div>
+        <nav class="cmd-actions">
+          <button class="btn primary" data-act="save" type="button"><svg class="ic" viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M9 4v5h6"/></svg><span class="lbl">Save</span> <kbd>Ctrl S</kbd></button>
+          <button class="btn disabled" data-act="new" type="button">New <kbd>Ctrl N</kbd></button>
+          <button class="btn disabled" data-act="duplicate" type="button">Duplicate <kbd>Ctrl D</kbd></button>
+          <button class="btn disabled" data-act="raw" type="button">Raw</button>
+          <button class="btn disabled" data-act="copy" type="button"><svg class="ic" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1"/><path d="M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1"/></svg>Copy link</button>
+        </nav>
+      </header>
+      <main class="editor">
+        <div class="gutter prompt" id="linenos">&gt;</div>
+        <div class="codewrap">
+          <textarea id="editor" spellcheck="false" placeholder="// paste or type, then Ctrl+S to save"></textarea>
+        </div>
+      </main>
+      <footer class="statusbar">
+        <span class="seg mode">NEW</span>
+        <span class="seg">0 lines / 0 chars</span>
+        <span class="seg hint">Ctrl+S to save</span>
+        <span class="spacer"></span>
+        <span class="seg theme"><button class="theme-btn" type="button">theme: rake</button></span>
+      </footer>
+    </div>
+  </div>
+
+  <!-- STATE B (rake) -->
+  <div class="cap">State B - saved paste (view mode) - rake theme</div>
+  <div class="snap">
+    <div class="app">
+      <div class="titlebar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">paste.rake.pro<b>/</b>kiwosame<b>.go</b></span></div>
+      <header class="cmdbar">
+        <div class="cmd-brand"><span class="cmd-mark">R</span><span class="cmd-name">go<span>paste</span></span></div>
+        <nav class="cmd-actions">
+          <button class="btn success" data-act="save" type="button"><svg class="ic" viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg><span class="lbl">Saved</span></button>
+          <button class="btn" data-act="new" type="button">New <kbd>Ctrl N</kbd></button>
+          <button class="btn" data-act="duplicate" type="button">Duplicate <kbd>Ctrl D</kbd></button>
+          <button class="btn" data-act="raw" type="button">Raw</button>
+          <button class="btn primary" data-act="copy" type="button"><svg class="ic" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1"/><path d="M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1"/></svg>Copy link</button>
+        </nav>
+      </header>
+      <main class="editor">
+        <div class="gutter" id="linenos">1
+2
+3
+4
+5
+6
+7
+8
+9
+10</div>
+        <div class="codewrap">
+          <pre id="box" class="hljs"><code><span class="hljs-keyword">package</span> main
+
+<span class="hljs-keyword">import</span> <span class="hljs-string">"net/http"</span>
+
+<span class="hljs-comment">// handlePost stores a paste and returns its key.</span>
+<span class="hljs-keyword">func</span> <span class="hljs-title">handlePost</span>(w http.ResponseWriter, r *http.Request) {
+    key := <span class="hljs-title">chooseKey</span>(<span class="hljs-number">10</span>)
+    store.<span class="hljs-title">Set</span>(key, body)
+    <span class="hljs-title">writeJSON</span>(w, <span class="hljs-number">200</span>, map[<span class="hljs-keyword">string</span>]<span class="hljs-keyword">string</span>{<span class="hljs-string">"key"</span>: key})
+}</code></pre>
+        </div>
+      </main>
+      <footer class="statusbar">
+        <span class="seg mode view">VIEW</span>
+        <span class="seg">key <b>kiwosame</b></span>
+        <span class="seg"><span class="led blue"></span><b>go</b></span>
+        <span class="seg">10 lines / 232 chars</span>
+        <span class="spacer"></span>
+        <span class="seg theme"><button class="theme-btn" type="button">theme: rake</button></span>
+      </footer>
+    </div>
+  </div>
+
+  <!-- STATE B (arctic) - same markup, theme switched on a wrapper to prove the token system -->
+  <div class="cap">Same view - arctic theme (token switch only)</div>
+  <div class="snap" data-theme="arctic">
+    <div class="app">
+      <div class="titlebar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="url">paste.rake.pro<b>/</b>kiwosame<b>.go</b></span></div>
+      <header class="cmdbar">
+        <div class="cmd-brand"><span class="cmd-mark">R</span><span class="cmd-name">go<span>paste</span></span></div>
+        <nav class="cmd-actions">
+          <button class="btn success" data-act="save" type="button"><svg class="ic" viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg><span class="lbl">Saved</span></button>
+          <button class="btn" data-act="new" type="button">New <kbd>Ctrl N</kbd></button>
+          <button class="btn" data-act="duplicate" type="button">Duplicate <kbd>Ctrl D</kbd></button>
+          <button class="btn" data-act="raw" type="button">Raw</button>
+          <button class="btn primary" data-act="copy" type="button"><svg class="ic" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1"/><path d="M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1"/></svg>Copy link</button>
+        </nav>
+      </header>
+      <main class="editor">
+        <div class="gutter" id="linenos">1
+2
+3
+4
+5
+6
+7
+8
+9
+10</div>
+        <div class="codewrap">
+          <pre id="box" class="hljs"><code><span class="hljs-keyword">package</span> main
+
+<span class="hljs-keyword">import</span> <span class="hljs-string">"net/http"</span>
+
+<span class="hljs-comment">// handlePost stores a paste and returns its key.</span>
+<span class="hljs-keyword">func</span> <span class="hljs-title">handlePost</span>(w http.ResponseWriter, r *http.Request) {
+    key := <span class="hljs-title">chooseKey</span>(<span class="hljs-number">10</span>)
+    store.<span class="hljs-title">Set</span>(key, body)
+    <span class="hljs-title">writeJSON</span>(w, <span class="hljs-number">200</span>, map[<span class="hljs-keyword">string</span>]<span class="hljs-keyword">string</span>{<span class="hljs-string">"key"</span>: key})
+}</code></pre>
+        </div>
+      </main>
+      <footer class="statusbar">
+        <span class="seg mode view">VIEW</span>
+        <span class="seg">key <b>kiwosame</b></span>
+        <span class="seg"><span class="led blue"></span><b>go</b></span>
+        <span class="seg">10 lines / 232 chars</span>
+        <span class="spacer"></span>
+        <span class="seg theme"><button class="theme-btn" type="button">theme: arctic</button></span>
+      </footer>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>gopaste/docs/mocks/gopaste-ui-implemented.html</span>
+    <span>links: web/static/application.css (live)</span>
+    <span>themes: rake / arctic</span>
+  </div>
+</div>
+</body>
+</html>
