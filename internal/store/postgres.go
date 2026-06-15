@@ -17,13 +17,23 @@ import (
 // pgUniqueViolation is the SQLSTATE for a unique_constraint violation.
 const pgUniqueViolation = "23505"
 
-// postgresStore targets the existing paste.rake.pro `entries` table so pastes
-// stored before deployment keep resolving (zero-migration cutover). The table
-// is not created here; provision it once with the DDL in docs/DESIGN.md.
+// postgresStore uses an `entries` table, created on first connect via
+// CREATE TABLE IF NOT EXISTS (idempotent). An existing table from a prior
+// deployment is reused as-is, so pastes keep resolving.
 type postgresStore struct {
 	pool   *pgxpool.Pool
 	expire int // seconds; 0 disables TTL
 }
+
+// createEntriesTable is idempotent: a no-op when the table already exists.
+const createEntriesTable = `
+CREATE TABLE IF NOT EXISTS entries (
+	id         serial PRIMARY KEY,
+	key        varchar(255) NOT NULL,
+	value      text NOT NULL,
+	expiration int,
+	UNIQUE(key)
+)`
 
 func newPostgres(ctx context.Context, cfg config.Storage) (*postgresStore, error) {
 	dsn := cfg.URL
@@ -37,6 +47,10 @@ func newPostgres(ctx context.Context, cfg config.Storage) (*postgresStore, error
 	if err := pool.Ping(ctx); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("postgres ping: %w", err)
+	}
+	if _, err := pool.Exec(ctx, createEntriesTable); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("postgres init schema: %w", err)
 	}
 	return &postgresStore{pool: pool, expire: cfg.Expire}, nil
 }
