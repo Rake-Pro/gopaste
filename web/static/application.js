@@ -105,15 +105,26 @@
   };
 
   App.prototype.setStatus = function (opts) {
-    function seg(id, show, html) {
+    // Build nodes with textContent (never innerHTML) so URL-derived key/lang
+    // values can never be interpreted as markup.
+    function boldSeg(id, show, prefixText, ledClass, value) {
       var el = document.getElementById(id);
       el.hidden = !show;
-      if (show && html != null) el.innerHTML = html;
+      if (!show) return;
+      el.textContent = '';
+      if (ledClass) {
+        var led = document.createElement('span');
+        led.className = ledClass;
+        el.appendChild(led);
+      }
+      if (prefixText) el.appendChild(document.createTextNode(prefixText));
+      var b = document.createElement('b');
+      b.textContent = value || '';
+      el.appendChild(b);
     }
-    seg('st-key', !!opts.key, 'key <b>' + (opts.key || '') + '</b>');
-    seg('st-lang', !!opts.lang, '<span class="led blue"></span><b>' + (opts.lang || '') + '</b>');
-    var count = document.getElementById('st-count');
-    count.textContent = opts.lines + ' lines / ' + opts.chars + ' chars';
+    boldSeg('st-key', !!opts.key, 'key ', null, opts.key);
+    boldSeg('st-lang', !!opts.lang, null, 'led blue', opts.lang);
+    document.getElementById('st-count').textContent = opts.lines + ' lines / ' + opts.chars + ' chars';
     document.getElementById('st-hint').hidden = opts.mode === 'VIEW';
   };
 

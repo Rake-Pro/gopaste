@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- build ----
-FROM golang:1.25 AS build
+FROM golang:1.25.11 AS build
 WORKDIR /src
 
 # Cache modules first.

@@ -71,6 +71,10 @@ func run(cfg config.Config) error {
 		Addr:              addr,
 		Handler:           h,
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second, // bounds slow-body / slowloris
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	// Graceful shutdown on SIGINT/SIGTERM.

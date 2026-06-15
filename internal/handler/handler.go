@@ -6,6 +6,8 @@ package handler
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"io/fs"
@@ -66,9 +68,9 @@ func New(cfg config.Config, s store.Store, gen keygen.Generator, staticKeys map[
 	// HEAD is matched automatically by the GET patterns (net/http 1.22+).
 	root := chain(mux,
 		recoverPanic,
-		requestLogger,
+		requestLogger(cfg.TrustedProxyCount),
 		securityHeaders,
-		newRateLimiter(cfg.RateLimit),
+		newRateLimiter(cfg.RateLimit, cfg.TrustedProxyCount),
 	)
 	return root, nil
 }
@@ -94,7 +96,7 @@ func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request) {
 	key := keyParam(r.PathValue("id"))
 	data, found, err := h.store.Get(r.Context(), key, !h.staticKeys[key])
 	if err != nil {
-		log.Error().Err(err).Str("key", key).Msg("get document")
+		log.Error().Err(err).Str("key", keyHash(key)).Msg("get document")
 		writeJSON(w, r, http.StatusInternalServerError, map[string]string{"message": "Connection error."})
 		return
 	}
@@ -109,7 +111,7 @@ func (h *Handler) handleRawGet(w http.ResponseWriter, r *http.Request) {
 	key := keyParam(r.PathValue("id"))
 	data, found, err := h.store.Get(r.Context(), key, !h.staticKeys[key])
 	if err != nil {
-		log.Error().Err(err).Str("key", key).Msg("get raw document")
+		log.Error().Err(err).Str("key", keyHash(key)).Msg("get raw document")
 		writeJSON(w, r, http.StatusInternalServerError, map[string]string{"message": "Connection error."})
 		return
 	}
@@ -134,6 +136,10 @@ func (h *Handler) handlePost(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, r, http.StatusBadRequest, map[string]string{"message": "Document exceeds maximum length."})
 		return
 	}
+	if strings.TrimSpace(data) == "" {
+		writeJSON(w, r, http.StatusBadRequest, map[string]string{"message": "Document cannot be empty."})
+		return
+	}
 
 	key, err := h.chooseKey(r.Context())
 	if err != nil {
@@ -142,11 +148,11 @@ func (h *Handler) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.store.Set(r.Context(), key, data); err != nil {
-		log.Error().Err(err).Str("key", key).Msg("add document")
+		log.Error().Err(err).Str("key", keyHash(key)).Msg("add document")
 		writeJSON(w, r, http.StatusInternalServerError, map[string]string{"message": "Error adding document."})
 		return
 	}
-	log.Debug().Str("key", key).Int("bytes", len(data)).Msg("added document")
+	log.Debug().Str("key", keyHash(key)).Int("bytes", len(data)).Msg("added document")
 	writeJSON(w, r, http.StatusOK, map[string]string{"key": key})
 }
 
@@ -254,6 +260,12 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 		w.Header().Set("Referrer-Policy", "same-origin")
+		// All assets are same-origin and self-hosted; no inline scripts. Inline
+		// style attributes (display toggling) need 'unsafe-inline' for style only.
+		w.Header().Set("Content-Security-Policy",
+			"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "+
+				"img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'none'; "+
+				"form-action 'self'; frame-ancestors 'self'")
 		next.ServeHTTP(w, r)
 	})
 }
@@ -269,31 +281,54 @@ func (s *statusRecorder) WriteHeader(code int) {
 	s.ResponseWriter.WriteHeader(code)
 }
 
-func requestLogger(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
-		next.ServeHTTP(rec, r)
-		log.Info().
-			Str("method", r.Method).
-			Str("path", r.URL.Path).
-			Int("status", rec.status).
-			Dur("dur", time.Since(start)).
-			Str("ip", clientIP(r)).
-			Msg("request")
-	})
+func requestLogger(trustedProxies int) Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+			next.ServeHTTP(rec, r)
+			// Log the matched route pattern, not the resolved path - the path
+			// embeds the paste key (a capability), which must not hit logs.
+			route := r.Pattern
+			if route == "" {
+				route = r.Method + " (unmatched)"
+			}
+			log.Info().
+				Str("route", route).
+				Int("status", rec.status).
+				Dur("dur", time.Since(start)).
+				Str("ip", clientIP(r, trustedProxies)).
+				Msg("request")
+		})
+	}
 }
 
-func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if i := strings.IndexByte(xff, ','); i >= 0 {
-			return strings.TrimSpace(xff[:i])
+// clientIP returns the client address for rate limiting and logging. To defeat
+// X-Forwarded-For spoofing, it trusts only the entry our own proxies appended:
+// the (trustedProxies)-th value counting from the right. Everything further left
+// is client-controllable and ignored. With trustedProxies=0 or no usable XFF it
+// falls back to the direct peer (RemoteAddr).
+func clientIP(r *http.Request, trustedProxies int) string {
+	if trustedProxies > 0 {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			parts := strings.Split(xff, ",")
+			if idx := len(parts) - trustedProxies; idx >= 0 && idx < len(parts) {
+				if ip := strings.TrimSpace(parts[idx]); ip != "" {
+					return ip
+				}
+			}
 		}
-		return strings.TrimSpace(xff)
 	}
 	host := r.RemoteAddr
 	if i := strings.LastIndexByte(host, ':'); i >= 0 {
-		return host[:i]
+		host = host[:i]
 	}
 	return host
+}
+
+// keyHash returns a short, non-reversible tag for a paste key so logs can
+// correlate without exposing the capability key itself.
+func keyHash(key string) string {
+	sum := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(sum[:4])
 }

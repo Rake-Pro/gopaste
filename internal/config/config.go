@@ -55,6 +55,12 @@ type Config struct {
 	Storage      Storage      `yaml:"storage"`
 	Auth         Auth         `yaml:"auth"`
 	LogLevel     string       `yaml:"logLevel"`
+
+	// TrustedProxyCount is how many trusted reverse proxies sit in front of the
+	// app. The client IP is taken as the Nth-from-rightmost X-Forwarded-For entry
+	// (anything further left is client-controllable and ignored). 0 = trust no
+	// XFF, use the direct peer (RemoteAddr).
+	TrustedProxyCount int `yaml:"trustedProxyCount"`
 }
 
 // Defaults returns the built-in configuration defaults.
@@ -62,13 +68,16 @@ func Defaults() Config {
 	return Config{
 		Host:         "0.0.0.0",
 		Port:         8080,
-		KeyLength:    10,
+		KeyLength:    16,
 		MaxLength:    400000,
 		StaticMaxAge: 86400,
-		KeyGenerator: KeyGenerator{Type: "phonetic"},
-		RateLimit:    RateLimit{TotalRequests: 500, Every: 60000},
-		Storage:      Storage{Type: "file", Path: "./data"},
-		LogLevel:     "info",
+		// random (not phonetic) by default: paste keys are capability URLs, so
+		// unguessable keyspace matters. 16 random chars ~= 95 bits.
+		KeyGenerator:      KeyGenerator{Type: "random"},
+		RateLimit:         RateLimit{TotalRequests: 500, Every: 60000},
+		Storage:           Storage{Type: "file", Path: "./data"},
+		LogLevel:          "info",
+		TrustedProxyCount: 0,
 	}
 }
 
@@ -100,6 +109,7 @@ func applyEnv(cfg *Config) {
 	setStr(&cfg.Host, "HOST")
 	setInt(&cfg.Port, "PORT")
 	setStr(&cfg.LogLevel, "LOG_LEVEL")
+	setInt(&cfg.TrustedProxyCount, "TRUSTED_PROXY_COUNT")
 
 	setStr(&cfg.Storage.Type, "STORAGE_TYPE")
 	setStr(&cfg.Storage.Host, "STORAGE_HOST")

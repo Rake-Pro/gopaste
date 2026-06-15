@@ -11,8 +11,9 @@ import (
 // rateLimiter is a per-client fixed-window limiter: at most TotalRequests per
 // Every window. A zero TotalRequests disables limiting.
 type rateLimiter struct {
-	max    int
-	window time.Duration
+	max            int
+	window         time.Duration
+	trustedProxies int
 
 	mu      sync.Mutex
 	windows map[string]*window
@@ -25,21 +26,22 @@ type window struct {
 
 // newRateLimiter returns middleware enforcing rl. When disabled it returns a
 // pass-through.
-func newRateLimiter(rl config.RateLimit) Middleware {
+func newRateLimiter(rl config.RateLimit, trustedProxies int) Middleware {
 	if rl.TotalRequests <= 0 || rl.Every <= 0 {
 		return func(next http.Handler) http.Handler { return next }
 	}
 	l := &rateLimiter{
-		max:     rl.TotalRequests,
-		window:  time.Duration(rl.Every) * time.Millisecond,
-		windows: make(map[string]*window),
+		max:            rl.TotalRequests,
+		window:         time.Duration(rl.Every) * time.Millisecond,
+		trustedProxies: trustedProxies,
+		windows:        make(map[string]*window),
 	}
 	return l.middleware
 }
 
 func (l *rateLimiter) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !l.allow(clientIP(r), time.Now()) {
+		if !l.allow(clientIP(r, l.trustedProxies), time.Now()) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusTooManyRequests)
 			_, _ = w.Write([]byte(`{"message":"Rate limit exceeded."}`))

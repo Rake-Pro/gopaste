@@ -6,12 +6,17 @@ host: "0.0.0.0"        # HOST
 port: 8080             # PORT
 logLevel: "info"       # LOG_LEVEL (debug|info|warn|error)
 
-keyLength: 10
+# Number of trusted reverse proxies in front of the app. The client IP is read
+# as the Nth-from-rightmost X-Forwarded-For entry (anything further left is
+# client-controllable and ignored). 0 = trust no XFF, use the direct peer.
+trustedProxyCount: 0   # TRUSTED_PROXY_COUNT
+
+keyLength: 16          # paste keys are capability URLs; longer = less guessable
 maxLength: 400000      # bytes (~390 KB); 0 disables the limit
 staticMaxAge: 86400    # Cache-Control max-age for static assets, seconds
 
 keyGenerator:
-  type: "phonetic"     # random | phonetic | dictionary
+  type: "random"       # random | phonetic | dictionary (random recommended)
   path: ""             # word-list path, required only for type: dictionary
 
 rateLimits:

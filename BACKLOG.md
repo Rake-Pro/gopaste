@@ -42,6 +42,17 @@ Mocks tracked in `docs/mocks/` (viewable via report-viewer). See `docs/mocks/REA
 - [ ] Live visual QA in a real browser (highlight.js across languages, mobile)
 - [ ] Optional: expiry countdown in status bar (needs backend to expose expiry)
 
+## Security follow-ups (post-review residual risk)
+- [x] Reject empty pastes; XFF-spoof-proof client IP (trustedProxyCount);
+      random/16 keys; keys out of logs; CSP; server timeouts; Go 1.25.11
+- [ ] Set `TRUSTED_PROXY_COUNT` in the deployment to match the proxy chain, and
+      ensure the edge (NPM) forwards the real client IP via X-Forwarded-For
+- [ ] Storage growth: no quota/expiration. Consider STORAGE_EXPIRE_SECONDS
+      (sliding TTL) and/or a per-client write quota for the public instance
+- [ ] CSRF on POST /documents: accepted as low risk (no cross-origin read, no
+      CORS). Revisit if write-abuse appears (Origin/Sec-Fetch-Site check)
+- [ ] Redact DSN components from startup connect-error logs
+
 ## Needs decision
 - [ ] License: choose and add (deferred until the project settles)
 
