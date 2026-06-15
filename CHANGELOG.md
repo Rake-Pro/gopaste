@@ -29,6 +29,9 @@ Versioning aims to follow [Semantic Versioning](https://semver.org/).
     `Sec-Fetch-Site` (curl/API clients and same-origin requests unaffected).
   - Storage growth: `STORAGE_EXPIRE_DAYS` convenience setting (overrides
     `STORAGE_EXPIRE_SECONDS`) so pastes can auto-expire (sliding TTL on read).
+  - Debug aid: at `LOG_LEVEL=debug` the request logger emits the raw
+    `X-Forwarded-For` / `X-Real-IP` / `RemoteAddr` ("forwarding headers"), for
+    diagnosing proxy / real-client-IP setup. No-op at info level.
 
 ### Added
 - Initial release of gopaste: a small, self-hosted pastebin as a single static
