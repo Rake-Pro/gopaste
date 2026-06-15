@@ -1,7 +1,7 @@
 # Build output
 /bin/
 /out/
-gopaste
+/gopaste
 
 # Local data / databases
 /data/

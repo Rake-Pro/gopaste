@@ -1,0 +1,38 @@
+# gopaste example configuration.
+# Every value can also be set via environment variables, which take precedence
+# (so the deployment's injected secrets stay authoritative). See the env column.
+
+host: "0.0.0.0"        # HOST
+port: 7777             # PORT
+logLevel: "info"       # LOG_LEVEL (debug|info|warn|error)
+
+keyLength: 10
+maxLength: 400000      # bytes (~390 KB); 0 disables the limit
+staticMaxAge: 86400    # Cache-Control max-age for static assets, seconds
+
+keyGenerator:
+  type: "phonetic"     # random | phonetic | dictionary
+  path: ""             # word-list path, required only for type: dictionary
+
+rateLimits:
+  totalRequests: 500   # per-client requests allowed per window; 0 disables
+  every: 60000         # window length, milliseconds
+
+storage:
+  type: "postgres"     # STORAGE_TYPE: postgres | sqlite | file
+
+  # --- postgres ---
+  # Either set `url` (DATABASE_URL) or the discrete parts below.
+  url: ""              # DATABASE_URL, e.g. postgres://user:pass@host:5432/db
+  host: ""             # STORAGE_HOST
+  port: 5432           # STORAGE_PORT
+  db: ""               # STORAGE_DB
+  user: ""             # STORAGE_USERNAME
+  password: ""         # STORAGE_PASSWORD
+  expire: 0            # STORAGE_EXPIRE_SECONDS; 0 = pastes never expire
+
+  # --- sqlite / file ---
+  path: ""             # STORAGE_FILEPATH: sqlite db file, or file-store directory
+
+# auth:                # post-MVP admin console (see docs/DESIGN.md section 9)
+#   mode: ""           # "" disabled | static | forward-auth | oidc
