@@ -292,6 +292,14 @@ func requestLogger(trustedProxies int) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
+			// Raw forwarding headers, only emitted at debug level - for
+			// diagnosing proxy/X-Forwarded-For setup without leaking at info.
+			if e := log.Debug(); e.Enabled() {
+				e.Str("xff", r.Header.Get("X-Forwarded-For")).
+					Str("xRealIP", r.Header.Get("X-Real-IP")).
+					Str("remoteAddr", r.RemoteAddr).
+					Msg("forwarding headers")
+			}
 			rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 			next.ServeHTTP(rec, r)
 			// Log the matched route pattern, not the resolved path - the path
