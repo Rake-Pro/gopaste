@@ -1,0 +1,23 @@
+# Build output
+/bin/
+/out/
+gopaste
+
+# Local data / databases
+/data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.testdata/
+
+# Local config overrides
+config.yaml
+gopaste.yaml
+
+# Editor / OS
+.DS_Store
+*.swp
+
+# local smoke-test artifacts
+.srv.log
