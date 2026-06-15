@@ -126,10 +126,10 @@ expiration) for normal documents, but not for preloaded built-in documents
 
 ### 4.2 PostgreSQL backend (production)
 
-Uses an `entries` table. The app does NOT create the table; provision it once
-(or use a `--init-db` helper for fresh deployments). At paste.rake.pro this is
-the existing table, so a deploy is zero-migration - verify the live schema
-against this DDL before cutover:
+Uses an `entries` table, created automatically on first connect via
+`CREATE TABLE IF NOT EXISTS` (idempotent). An existing table from a prior
+deployment is reused unchanged (zero-migration). The role only needs CREATE on
+its schema for the first run. Schema:
 
 ```sql
 create table entries (

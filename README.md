@@ -61,8 +61,8 @@ Configuration is read from an optional YAML file (`--config path` or
 
 ### Storage backends
 
-- `postgres`: uses an `entries` table (DDL in `docs/DESIGN.md`). The app does
-  not create it; provision it once.
+- `postgres`: uses an `entries` table, auto-created on first connect
+  (idempotent). Just create the database + role; the app does the rest.
 - `sqlite`: single local file, table auto-created. Pure-Go driver, no CGO.
 - `file`: one file per paste; no expiration.
 
