@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rake-pro/gopaste/internal/config"
 	"github.com/rake-pro/gopaste/internal/keygen"
@@ -183,6 +184,37 @@ func TestSecurityHeaders(t *testing.T) {
 	}
 	if resp.Header.Get("X-Frame-Options") == "" {
 		t.Fatal("missing X-Frame-Options")
+	}
+}
+
+func TestChargeBytesBudget(t *testing.T) {
+	l := newRateLimiter(config.RateLimit{Every: 60000, MaxBytes: 100}, 0)
+	now := time.Unix(0, 0)
+
+	if !l.chargeBytes("ip", 60, now) {
+		t.Fatal("first 60 bytes should be allowed")
+	}
+	if !l.chargeBytes("ip", 40, now) {
+		t.Fatal("cumulative 100 bytes (== budget) should be allowed")
+	}
+	if l.chargeBytes("ip", 1, now) {
+		t.Fatal("byte over budget should be rejected")
+	}
+	// A different client has an independent budget.
+	if !l.chargeBytes("other", 100, now) {
+		t.Fatal("second client should have its own budget")
+	}
+	// Window rollover clears the budget.
+	if !l.chargeBytes("ip", 100, now.Add(61*time.Second)) {
+		t.Fatal("budget should reset in the next window")
+	}
+}
+
+func TestChargeBytesDisabled(t *testing.T) {
+	l := newRateLimiter(config.RateLimit{Every: 60000, MaxBytes: 0}, 0)
+	now := time.Unix(0, 0)
+	if !l.chargeBytes("ip", 1<<30, now) {
+		t.Fatal("byte budget of 0 must disable the limit")
 	}
 }
 

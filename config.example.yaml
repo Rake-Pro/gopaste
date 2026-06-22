@@ -1,6 +1,7 @@
 # gopaste example configuration.
-# Every value can also be set via environment variables, which take precedence
-# (so the deployment's injected secrets stay authoritative). See the env column.
+# Values with an env name in the trailing comment can also be set via environment
+# variable, which takes precedence (so the deployment's injected secrets stay
+# authoritative). Values without an env name are file-only.
 
 host: "0.0.0.0"        # HOST
 port: 8080             # PORT
@@ -12,7 +13,7 @@ logLevel: "info"       # LOG_LEVEL (debug|info|warn|error)
 trustedProxyCount: 0   # TRUSTED_PROXY_COUNT
 
 keyLength: 16          # paste keys are capability URLs; longer = less guessable
-maxLength: 400000      # bytes (~390 KB); 0 disables the limit
+maxLength: 157286400   # MAX_LENGTH; bytes (150 MB); 0 disables the limit
 staticMaxAge: 86400    # Cache-Control max-age for static assets, seconds
 
 keyGenerator:
@@ -22,6 +23,8 @@ keyGenerator:
 rateLimits:
   totalRequests: 500   # per-client requests allowed per window; 0 disables
   every: 60000         # window length, milliseconds
+  maxBytes: 629145600  # RATE_LIMIT_MAX_BYTES; accepted paste bytes per client
+                       # per window (600 MB); flood control for large pastes; 0 disables
 
 storage:
   type: "postgres"     # STORAGE_TYPE: postgres | sqlite | file

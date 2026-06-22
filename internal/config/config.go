@@ -35,10 +35,14 @@ type KeyGenerator struct {
 }
 
 // RateLimit allows TotalRequests per Every milliseconds, per client. Zero
-// TotalRequests disables rate limiting.
+// TotalRequests disables the request-count limit. MaxBytes additionally caps the
+// total accepted paste bytes per client within the same window (flood control
+// for large pastes); zero disables the byte budget. The two limits are
+// independent - either, both, or neither may be active.
 type RateLimit struct {
 	TotalRequests int `yaml:"totalRequests"`
-	Every         int `yaml:"every"` // milliseconds
+	Every         int `yaml:"every"`    // milliseconds
+	MaxBytes      int `yaml:"maxBytes"` // accepted paste bytes per client per window; 0 disables
 }
 
 // Auth is a placeholder for the post-MVP admin auth seam (see DESIGN sec 9).
@@ -73,12 +77,17 @@ func Defaults() Config {
 		Host:         "0.0.0.0",
 		Port:         8080,
 		KeyLength:    16,
-		MaxLength:    400000,
+		// 150 MB. Deliberately large; well under postgres text's ~1GB field cap
+		// and bounded per-request so a single in-memory read can't exhaust the
+		// pod. Per-client volume over time is bounded by RateLimit.MaxBytes.
+		MaxLength:    157286400,
 		StaticMaxAge: 86400,
 		// random (not phonetic) by default: paste keys are capability URLs, so
 		// unguessable keyspace matters. 16 random chars ~= 95 bits.
 		KeyGenerator:      KeyGenerator{Type: "random"},
-		RateLimit:         RateLimit{TotalRequests: 500, Every: 60000},
+		// 600 MB/client/min: room for a handful of large pastes per minute while
+		// bounding storage/bandwidth flood now that maxLength is 150 MB.
+		RateLimit:         RateLimit{TotalRequests: 500, Every: 60000, MaxBytes: 629145600},
 		Storage:           Storage{Type: "file", Path: "./data"},
 		LogLevel:          "info",
 		TrustedProxyCount: 0,
@@ -119,6 +128,8 @@ func applyEnv(cfg *Config) {
 	setInt(&cfg.Port, "PORT")
 	setStr(&cfg.LogLevel, "LOG_LEVEL")
 	setInt(&cfg.TrustedProxyCount, "TRUSTED_PROXY_COUNT")
+	setInt(&cfg.MaxLength, "MAX_LENGTH")
+	setInt(&cfg.RateLimit.MaxBytes, "RATE_LIMIT_MAX_BYTES")
 
 	setStr(&cfg.Storage.Type, "STORAGE_TYPE")
 	setStr(&cfg.Storage.Host, "STORAGE_HOST")
