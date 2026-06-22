@@ -32,6 +32,14 @@ Versioning aims to follow [Semantic Versioning](https://semver.org/).
   - Debug aid: at `LOG_LEVEL=debug` the request logger emits the raw
     `X-Forwarded-For` / `X-Real-IP` / `RemoteAddr` ("forwarding headers"), for
     diagnosing proxy / real-client-IP setup. No-op at info level.
+  - Flood control for large pastes: a per-client byte budget per rate-limit
+    window (`maxBytes` / `RATE_LIMIT_MAX_BYTES`, default 600 MB/min) on top of
+    the existing request-count limit; over-budget writes return 429.
+
+### Changed
+- Maximum paste size raised to 150 MB (`maxLength`, was ~390 KB) and now
+  overridable from the environment via `MAX_LENGTH`. Bounded per-request and
+  well under PostgreSQL's `text` field cap.
 
 ### Added
 - Initial release of gopaste: a small, self-hosted pastebin as a single static

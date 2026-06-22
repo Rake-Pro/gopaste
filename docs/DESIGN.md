@@ -1,6 +1,6 @@
 # gopaste - Design Document
 
-Status: Draft (v0.1, 2026-06-15)
+Status: Live - paste.rake.pro (public)
 Module: `github.com/rake-pro/gopaste`
 Binary: `gopaste`
 
@@ -17,21 +17,19 @@ Goals:
   PostgreSQL is the production backend for paste.rake.pro; sqlite and file
   exist for low-dependency self-hosting.
 - Single static binary, no CGO, deployable on a `distroless`/`scratch` base.
-- Deploy in place at paste.rake.pro against the existing PostgreSQL database
-  with zero data migration, driven entirely by the `STORAGE_*` environment
-  contract the GitOps/ArgoCD chart injects.
+- Runs at paste.rake.pro on PostgreSQL, configured entirely through the
+  `STORAGE_*` environment contract the GitOps/ArgoCD chart injects.
 - Global structured logging via zerolog.
 
-Non-goals (for v1):
+Non-goals:
 
 - Storage backends beyond postgres/sqlite/file. The storage interface leaves
   room to add more later.
 - End-user authentication / multi-user paste ownership. The public paste API is
-  unauthenticated. (An admin console with auth is planned - see section 8 - but
-  it is out of MVP scope.)
-- A finalized frontend. v1 ships a working brand-themed UI; the backend depends
-  only on the API contract (section 3), not on any specific markup, so the asset
-  bundle is swappable.
+  unauthenticated. (An admin console with auth is planned - see section 8.)
+- A finalized frontend. The shipped brand-themed UI is stable, but the backend
+  depends only on the API contract (section 3), not on any specific markup, so
+  the asset bundle is swappable.
 
 ## 2. Service overview
 
@@ -62,6 +60,9 @@ POST /documents:
 
 - 200: `{"key": "<key>"}`
 - 400: `{"message": "Document exceeds maximum length."}` (body length > maxLength)
+- 400: `{"message": "Document cannot be empty."}` (empty/whitespace-only body)
+- 403: `{"message": "Cross-site request blocked."}` (cross-site browser write; `Sec-Fetch-Site`)
+- 429: `{"message": "Rate limit exceeded."}` (request-count or byte budget exceeded)
 - 500: `{"message": "Error adding document."}` (store write failure)
 
 GET /documents/:id:
@@ -80,7 +81,7 @@ consumers.
 
 ### 3.3 Key generation
 
-- Default key length: 10 characters.
+- Default key length: 16 characters (~95 bits), default generator `random`.
 - Generators: `random`, `phonetic`, `dictionary`.
 - Keys are generated with `crypto/rand`, so they are not predictable.
 - Collision handling: generate a key, check existence (without bumping TTL),
@@ -90,14 +91,15 @@ consumers.
 
 | Key              | Default  | Notes                                       |
 |------------------|----------|---------------------------------------------|
-| port             | 8080     | overridable by `PORT`                       |
-| host             | 0.0.0.0  | overridable by `HOST`                       |
-| keyLength        | 10       |                                             |
-| maxLength        | 400000   | bytes (~390 KB)                             |
-| staticMaxAge     | 86400    | seconds, Cache-Control max-age for static   |
-| keyGenerator     | phonetic |                                             |
-| rateLimits       | 500/60s  | "normal" category total requests per window |
-| storage.type     | file     | production overrides to `postgres`          |
+| port               | 8080      | overridable by `PORT`                       |
+| host               | 0.0.0.0   | overridable by `HOST`                       |
+| keyLength          | 16        | ~95 bits of key entropy                     |
+| maxLength          | 157286400 | bytes (150 MB); `MAX_LENGTH`; 0 disables    |
+| staticMaxAge       | 86400     | seconds, Cache-Control max-age for static   |
+| keyGenerator       | random    |                                             |
+| rateLimits         | 500/60s   | total requests per client per window        |
+| rateLimits.maxBytes| 629145600 | bytes per client per window (600 MB); `RATE_LIMIT_MAX_BYTES`; 0 disables |
+| storage.type       | file      | production overrides to `postgres`          |
 
 ## 4. Storage
 
@@ -127,9 +129,8 @@ expiration) for normal documents, but not for preloaded built-in documents
 ### 4.2 PostgreSQL backend (production)
 
 Uses an `entries` table, created automatically on first connect via
-`CREATE TABLE IF NOT EXISTS` (idempotent). An existing table from a prior
-deployment is reused unchanged (zero-migration). The role only needs CREATE on
-its schema for the first run. Schema:
+`CREATE TABLE IF NOT EXISTS` (idempotent); an existing table is reused as-is.
+The role only needs CREATE on its schema for the first run. Schema:
 
 ```sql
 create table entries (
@@ -183,6 +184,10 @@ Two layers, env wins (so the deployment's injected secrets are authoritative):
 | Env var                  | Maps to            |
 |--------------------------|--------------------|
 | `PORT` / `HOST`          | server bind        |
+| `LOG_LEVEL`              | log level          |
+| `TRUSTED_PROXY_COUNT`    | trustedProxyCount  |
+| `MAX_LENGTH`             | maxLength          |
+| `RATE_LIMIT_MAX_BYTES`   | rateLimits.maxBytes |
 | `STORAGE_TYPE`           | storage.type       |
 | `STORAGE_HOST`           | storage.host       |
 | `STORAGE_PORT`           | storage.port       |
@@ -190,6 +195,7 @@ Two layers, env wins (so the deployment's injected secrets are authoritative):
 | `STORAGE_USERNAME`       | storage.user       |
 | `STORAGE_PASSWORD`       | storage.password   |
 | `STORAGE_EXPIRE_SECONDS` | storage.expire     |
+| `STORAGE_EXPIRE_DAYS`    | storage.expireDays (overrides expire) |
 | `STORAGE_FILEPATH`       | storage.path (file/sqlite) |
 | `DATABASE_URL`           | full postgres DSN (overrides parts) |
 
@@ -221,10 +227,10 @@ config.example.yaml        documented sample config
 Frontend assets are compiled into the binary via `embed.FS`, so deployment is a
 single artifact with no external file dependencies.
 
-## 8. Admin console and auth (planned, post-MVP)
+## 8. Admin console and auth (planned)
 
-Not an MVP deliverable, but the architecture leaves clean seams so adding it
-later is wiring, not surgery.
+Not built yet, but the architecture leaves clean seams so adding it later is
+wiring, not surgery.
 
 Intended shape:
 
@@ -258,16 +264,18 @@ Design implications enforced now (so the seam exists in MVP):
   will extend it later. Backends centralize their queries so adding methods is
   local.
 - Config has room for an `auth` section (mode + provider settings) even though
-  v1 leaves it disabled.
+  it is currently disabled.
 
-## 9. Deployment / cutover plan
+## 9. Deployment
 
-1. Build `ghcr.io/rake-pro/gopaste:<tag>` via the GHCR CI workflow.
-2. Point at the production Postgres (`STORAGE_TYPE=postgres`, same secret).
-3. Dump and diff the live `entries` schema against section 4.2 before cutover.
-4. Deploy to a staging path, verify create/read/raw/expiry against real data.
-5. Swap the image in the `paste` app's Helm values (in Rake-Pro/GitOps-ArgoCD);
-   ArgoCD syncs. (The chart directory still carries a legacy name pending rename.)
-6. Keep the previous image pinned for rollback.
+gopaste runs at paste.rake.pro in the rake.pro Kubernetes cluster:
 
-Open items tracked in BACKLOG.md.
+- Image `ghcr.io/rake-pro/gopaste:latest`, built by the GHCR CI workflow on the
+  `master -> prod` flow and rolled by ArgoCD Image Updater (digest strategy).
+- Helm chart `cluster-apps/gopaste` in Rake-Pro/GitOps-ArgoCD, with
+  `STORAGE_TYPE=postgres` and credentials from an ExternalSecret (GSM). Fronted
+  by NPM + Traefik, so `TRUSTED_PROXY_COUNT=2`.
+- Storage is the production PostgreSQL `entries` table; the binary embeds its own
+  assets, so no volumes are required.
+
+Outstanding work is tracked in BACKLOG.md.
