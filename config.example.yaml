@@ -44,5 +44,20 @@ storage:
   # --- sqlite / file ---
   path: ""             # STORAGE_FILEPATH: sqlite db file, or file-store directory
 
-# auth:                # post-MVP admin console (see docs/DESIGN.md section 9)
-#   mode: ""           # "" disabled | static | forward-auth | oidc
+# auth:                  # admin console (disabled by default).
+#                        # Gates only /admin; the paste API stays public.
+#                        # Setup guide: docs/AUTH.md. Design: docs/DESIGN.md sec 8.
+#   mode: disabled       # AUTH_MODE: disabled | oidc | local
+#   sessionKey: ""       # AUTH_SESSION_KEY: random >=32 bytes; signs the session cookie
+#   oidc:                # mode: oidc - native confidential client + PKCE (S256)
+#     issuer: ""         # OIDC_ISSUER: e.g. https://auth.example.com/application/o/gopaste/
+#     clientID: ""       # OIDC_CLIENT_ID
+#     clientSecret: ""   # OIDC_CLIENT_SECRET
+#     redirectURL: ""    # OIDC_REDIRECT_URL: https://<host>/admin/callback
+#     postLogoutRedirectURL: "" # OIDC_POST_LOGOUT_REDIRECT_URL: https://<host>/admin/logout
+#     adminGroup: ""     # OIDC_ADMIN_GROUP: only members of this group are admitted
+#     groupsClaim: groups # OIDC_GROUPS_CLAIM: claim carrying group names
+#   local:               # mode: local - for self-hosters without an IdP
+#     admins:
+#       - username: admin
+#         passwordHash: "" # bcrypt, e.g. htpasswd -nbB admin <pw>

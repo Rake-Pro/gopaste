@@ -227,44 +227,36 @@ config.example.yaml        documented sample config
 Frontend assets are compiled into the binary via `embed.FS`, so deployment is a
 single artifact with no external file dependencies.
 
-## 8. Admin console and auth (planned)
+## 8. Admin console and auth
 
-Not built yet, but the architecture leaves clean seams so adding it later is
-wiring, not surgery.
+An optional admin console at `/admin` (UI + `/admin/api/*`) for listing,
+searching, deleting pastes, viewing stats and purging expired rows. The public
+paste API stays unauthenticated; only the admin group is gated. Disabled by
+default (`auth.mode`). Implemented in `internal/auth`; setup in `docs/AUTH.md`.
 
-Intended shape:
+Auth strategy (native OIDC + local fallback):
 
-- A separate route group (e.g. `/admin`, `/admin/api/*`) for management:
-  listing/searching pastes, deleting abusive content, viewing stats, purging
-  expired rows. The public paste API stays unauthenticated; only the admin
-  group is gated.
+- `oidc` (primary): gopaste is itself the OIDC client - it runs the auth-code
+  flow against the IdP (discovery via the issuer) as a confidential client with
+  PKCE (S256), validates the ID token (state + nonce), reads the groups claim,
+  and admits only members of the configured admin group.
+- `local` (fallback): bcrypt admin credentials from config, for self-hosters
+  without an IdP.
+- `Identity` carries user id + groups so authorization is admin-group membership.
 
-Auth strategy (pluggable, decided later):
+Sessions and routing:
 
-- An `Authenticator` interface with at minimum
-  `Authenticate(r *http.Request) (Identity, bool)` and a middleware that wraps
-  the admin route group. Public routes never touch it.
-- Planned implementations:
-  - `static` / dev: a single admin credential (user+password or token) from
-    config/env, for local and bootstrap use.
-  - `forward-auth` / OIDC: trust an upstream proxy (Authentik, or any
-    forward-auth provider) via signed headers (e.g. `X-Forwarded-User`,
-    `X-Forwarded-Groups`) or an OIDC token, matching how other rake.pro apps
-    are fronted. gopaste authorizes; the provider authenticates.
-- Identity carries user id + groups/roles so authorization is expressible
-  without another refactor.
+- Server-side, revocable sessions (in-process map): the cookie holds only an
+  opaque, HMAC-signed id (`AUTH_SESSION_KEY`); identity/groups never leave the
+  server, and logout/expiry revoke immediately. Cookie is `Secure`, `HttpOnly`,
+  `SameSite=Lax`, scoped to `/admin`. Sessions reset on restart (single pod).
+- Routes: `/admin` (console), `/admin/login`, `/admin/callback`,
+  `/admin/logout` (RP-initiated logout in OIDC mode), `/admin/api/*`.
+- Hidden: the UI returns 404 to anonymous/non-admin (the API returns 401 so the
+  console JS can redirect to login), so the console's existence isn't disclosed.
 
-Design implications enforced now (so the seam exists in MVP):
-
-- HTTP handlers are composed through a middleware chain
-  (`func(http.Handler) http.Handler`), and routes are registered in named
-  groups (`public`, future `admin`). Adding an auth middleware to the admin
-  group is then a one-line insertion.
-- The `Store` interface is the single data path; admin features (list, delete)
-  will extend it later. Backends centralize their queries so adding methods is
-  local.
-- Config has room for an `auth` section (mode + provider settings) even though
-  it is currently disabled.
+The handler middleware chain and the `Store` interface (extended with
+`List`/`Delete`/`Stats`/`PurgeExpired`) were the reserved seams this slots into.
 
 ## 9. Deployment
 

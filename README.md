@@ -51,6 +51,10 @@ Configuration is read from an optional YAML file (`--config path` or
 `GOPASTE_CONFIG`), then overlaid with environment variables, which win. See
 [`config.example.yaml`](config.example.yaml) for every key and its env var.
 
+An optional admin console (`/admin`, disabled by default) adds OIDC or local
+auth for listing and deleting pastes; setup and the config contract are in
+[`docs/AUTH.md`](docs/AUTH.md).
+
 | Env var | Purpose |
 |---|---|
 | `STORAGE_TYPE` | `postgres` \| `sqlite` \| `file` |

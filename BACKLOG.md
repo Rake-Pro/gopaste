@@ -10,14 +10,13 @@ Status keys: `[ ]` todo, `[~]` in progress, `[?]` needs decision.
 - [ ] Expiry countdown in status bar (needs backend to expose expiry)
 - [?] License: choose and add (deferred until the project settles)
 
-## Post-MVP - Admin console + auth
-- [ ] `/admin` route group, gated by auth middleware (public API stays open)
-- [ ] `Authenticator` interface + middleware seam (see DESIGN sec 8)
-- [ ] `static`/dev auth provider: single admin credential from config/env
-- [ ] forward-auth / OIDC provider: trust Authentik headers / validate OIDC
-- [ ] Identity with groups/roles for authorization
-- [ ] Extend Store with List/Delete for admin paste management
-- [ ] Admin UI: list/search/delete pastes, stats, purge expired
+## Admin console - follow-ups
+The console shipped (OIDC + local, hidden, server-side sessions; see CHANGELOG).
+Remaining niceties:
+- [ ] Dedicated rate limit on `/admin/login` (today it shares the global limiter).
+- [ ] Audit-log admin actions to a sink, not just zerolog (deletes/purges).
+- [ ] Optional: column sort + bulk-select delete in the console.
+- [ ] List pagination beyond `DefaultListLimit` (500) for very large stores.
 
 ## Future / maybe
 - [ ] Optional backends: s3, redis (behind the same interface)

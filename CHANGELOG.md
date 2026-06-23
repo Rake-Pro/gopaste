@@ -40,8 +40,21 @@ Versioning aims to follow [Semantic Versioning](https://semver.org/).
 - Maximum paste size raised to 150 MB (`maxLength`, was ~390 KB) and now
   overridable from the environment via `MAX_LENGTH`. Bounded per-request and
   well under PostgreSQL's `text` field cap.
+- Schema: added a nullable `created` column to `entries` (additive, idempotent
+  `ADD COLUMN IF NOT EXISTS` on postgres / probed on sqlite). Pre-existing rows
+  keep NULL created ("unknown" in the admin console); new pastes record it.
 
 ### Added
+- Optional admin console at `/admin` (disabled by default; `auth.mode`). Lists,
+  searches, deletes pastes; shows count/byte stats; purges expired rows.
+  - Auth: native OIDC confidential client with PKCE (S256), state + nonce, and
+    admin-group gating via a groups claim; or a local bcrypt-credential fallback.
+  - Server-side revocable sessions; opaque HMAC-signed cookie
+    (`Secure`/`HttpOnly`/`SameSite=Lax`, `/admin`-scoped). RP-initiated logout.
+  - Hidden console: the UI 404s for anonymous/non-admin requests; the API 401s.
+    `Store` gained `List`/`Delete`/`Stats`/`PurgeExpired`. Embedded brand-themed
+    UI (`web/admin`). New deps: `coreos/go-oidc/v3`, `golang.org/x/oauth2`,
+    `golang.org/x/crypto`. govulncheck clean.
 - Initial release of gopaste: a small, self-hosted pastebin as a single static
   Go binary with an embedded frontend and no external runtime dependencies.
 - HTTP + JSON API: `POST /documents`, `GET|HEAD /documents/:id`,

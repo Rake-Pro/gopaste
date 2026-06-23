@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rake-pro/gopaste/internal/auth"
 	"github.com/rake-pro/gopaste/internal/config"
 	"github.com/rake-pro/gopaste/internal/keygen"
 	"github.com/rake-pro/gopaste/internal/store"
@@ -33,7 +34,11 @@ func newTestServer(t *testing.T) *httptest.Server {
 		staticKeys["about"] = true
 	}
 
-	h, err := New(cfg, s, gen, staticKeys, web.Static())
+	authMgr, err := auth.New(t.Context(), cfg.Auth) // disabled: cfg.Auth.Mode is ""
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := New(cfg, s, gen, authMgr, staticKeys, web.Static())
 	if err != nil {
 		t.Fatal(err)
 	}

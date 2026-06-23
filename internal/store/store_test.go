@@ -69,6 +69,84 @@ func TestSQLiteExpiry(t *testing.T) {
 	}
 }
 
+// adminConformance exercises List/Delete/Stats/PurgeExpired. listByKey is false
+// for the file backend, whose List handles are md5 hashes, not the paste keys.
+func adminConformance(t *testing.T, s Store, listByKey bool) {
+	t.Helper()
+	ctx := context.Background()
+
+	if err := s.Set(ctx, "alpha", "12345"); err != nil { // 5 bytes
+		t.Fatal(err)
+	}
+	if err := s.Set(ctx, "beta", "ABCDEFGHIJ"); err != nil { // 10 bytes
+		t.Fatal(err)
+	}
+
+	st, err := s.Stats(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Count != 2 || st.Bytes != 15 {
+		t.Fatalf("Stats = %+v, want count 2 bytes 15", st)
+	}
+
+	metas, err := s.List(ctx, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(metas) != 2 {
+		t.Fatalf("List len = %d, want 2", len(metas))
+	}
+	if listByKey {
+		got := map[string]int{}
+		for _, m := range metas {
+			got[m.Key] = m.Size
+		}
+		if got["alpha"] != 5 || got["beta"] != 10 {
+			t.Fatalf("List sizes = %v, want alpha 5 beta 10", got)
+		}
+	}
+
+	handle := metas[0].Key
+	found, err := s.Delete(ctx, handle)
+	if err != nil || !found {
+		t.Fatalf("Delete(%q) = found %v err %v, want true nil", handle, found, err)
+	}
+	if found, err := s.Delete(ctx, handle); err != nil || found {
+		t.Fatalf("Delete(%q) again = found %v err %v, want false nil", handle, found, err)
+	}
+
+	if st, _ := s.Stats(ctx); st.Count != 1 {
+		t.Fatalf("Stats after delete = count %d, want 1", st.Count)
+	}
+
+	n, err := s.PurgeExpired(ctx)
+	if err != nil {
+		t.Fatalf("PurgeExpired: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("PurgeExpired with nothing expired = %d, want 0", n)
+	}
+}
+
+func TestFileStoreAdmin(t *testing.T) {
+	s, err := newFile(config.Storage{Type: "file", Path: filepath.Join(t.TempDir(), "data")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	adminConformance(t, s, false)
+}
+
+func TestSQLiteStoreAdmin(t *testing.T) {
+	s, err := newSQLite(config.Storage{Type: "sqlite", Path: filepath.Join(t.TempDir(), "a.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	adminConformance(t, s, true)
+}
+
 // TestPostgresConformance runs only when GOPASTE_TEST_PG points at a database.
 func TestPostgresConformance(t *testing.T) {
 	dsn := os.Getenv("GOPASTE_TEST_PG")

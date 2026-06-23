@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rake-pro/gopaste/internal/auth"
 	"github.com/rake-pro/gopaste/internal/config"
 	"github.com/rake-pro/gopaste/internal/handler"
 	"github.com/rake-pro/gopaste/internal/keygen"
@@ -61,7 +62,19 @@ func run(cfg config.Config) error {
 
 	staticKeys := preloadDocuments(ctx, st)
 
-	h, err := handler.New(cfg, st, gen, staticKeys, web.Static())
+	// Build the admin-console authenticator. In OIDC mode this performs
+	// discovery against the issuer, so bound it with a timeout.
+	authCtx, authCancel := context.WithTimeout(ctx, 20*time.Second)
+	authMgr, err := auth.New(authCtx, cfg.Auth)
+	authCancel()
+	if err != nil {
+		return err
+	}
+	if authMgr.Enabled() {
+		log.Info().Str("mode", cfg.Auth.Mode).Msg("admin console enabled")
+	}
+
+	h, err := handler.New(cfg, st, gen, authMgr, staticKeys, web.Static())
 	if err != nil {
 		return err
 	}
