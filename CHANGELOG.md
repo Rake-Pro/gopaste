@@ -35,6 +35,10 @@ Versioning aims to follow [Semantic Versioning](https://semver.org/).
   - Flood control for large pastes: a per-client byte budget per rate-limit
     window (`maxBytes` / `RATE_LIMIT_MAX_BYTES`, default 600 MB/min) on top of
     the existing request-count limit; over-budget writes return 429.
+  - Tightened CSP: dropped `style-src 'unsafe-inline'` (now `style-src 'self'`).
+    All inline `style=` attributes moved to stylesheets; runtime show/hide uses
+    the CSSOM (`el.style`), which `style-src` does not govern. Admin login /
+    signed-out pages styled via the new public `/auth.css`.
 
 ### Changed
 - Maximum paste size raised to 150 MB (`maxLength`, was ~390 KB) and now

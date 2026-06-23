@@ -49,7 +49,7 @@ function render() {
   const rows = $('rows');
   const shown = pastes.filter((p) => !q || p.key.toLowerCase().includes(q));
   if (!shown.length) {
-    rows.innerHTML = '<tr><td colspan="5" class="muted" style="padding:18px 16px">no pastes' + (q ? ' match the filter' : '') + '</td></tr>';
+    rows.innerHTML = '<tr><td colspan="5" class="muted pad-lg">no pastes' + (q ? ' match the filter' : '') + '</td></tr>';
     return;
   }
   rows.innerHTML = shown.map((p) => {

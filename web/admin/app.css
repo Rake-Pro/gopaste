@@ -48,6 +48,8 @@ body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
 .tag{font-family:var(--font-display);font-size:.62rem;letter-spacing:.22em;color:var(--green-bright);
   border:1px solid var(--line-strong);border-radius:5px;padding:3px 7px;text-transform:uppercase}
 .spacer{flex:1}
+.ta-r{text-align:right}
+.pad-lg{padding:18px 16px}
 .idchip{display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:.68rem;color:var(--ink-dim);
   border:1px solid var(--line);border-radius:7px;padding:6px 10px;background:var(--code-bg)}
 .idchip b{color:var(--steel-300);font-weight:500}

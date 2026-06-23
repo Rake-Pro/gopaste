@@ -164,7 +164,7 @@
     this.code.innerHTML = hi.value;
     this.box.className = 'hljs';
     this.editor.style.display = 'none';
-    this.box.style.display = '';
+    this.box.style.display = 'block'; // explicit: #box CSS default is display:none
     var lineCount = data.split('\n').length;
     this.renderGutter(lineCount);
     this.setMode('VIEW');

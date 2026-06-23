@@ -143,7 +143,9 @@ body{
   font-family:var(--font-mono);font-size:13.5px;line-height:1.55;
   background:transparent;color:var(--steel-100);tab-size:2;
 }
-#box{overflow:auto;white-space:pre;}
+/* #box starts hidden (was an inline style="display:none"; moved here so the CSP
+   can drop style-src 'unsafe-inline'). showDocument() sets display:block. */
+#box{overflow:auto;white-space:pre;display:none;}
 #editor{white-space:pre;overflow:auto;caret-color:var(--steel-400);}
 #editor::placeholder{color:var(--ink-faint);font-style:italic;}
 
