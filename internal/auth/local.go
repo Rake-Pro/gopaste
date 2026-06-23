@@ -57,20 +57,23 @@ func (p *localProvider) fail(w http.ResponseWriter, r *http.Request, user string
 }
 
 // loginForm renders the minimal local sign-in page. msg is an optional error.
+// Styling lives in the public /auth.css (no inline styles, so the CSP can stay
+// strict).
 func (p *localProvider) loginForm(w http.ResponseWriter, _ *http.Request, msg string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	banner := ""
 	if msg != "" {
-		banner = `<p style="color:#c0556a;margin:0 0 12px">` + htmlEscape(msg) + `</p>`
+		banner = `<p class="auth-err">` + htmlEscape(msg) + `</p>`
 	}
-	_, _ = w.Write([]byte(`<!doctype html><meta charset="utf-8"><title>gopaste admin</title>` +
-		`<body style="font-family:system-ui;background:#060f18;color:#cfe0f0;display:grid;place-items:center;height:100vh;margin:0">` +
-		`<form method="post" action="/admin/login" style="background:#0f2236;border:1px solid rgba(127,176,224,.25);padding:28px 30px;border-radius:12px;min-width:300px">` +
-		`<h1 style="font-size:1rem;letter-spacing:.04em;margin:0 0 18px;color:#eaf4ff">gopaste // admin</h1>` + banner +
-		`<input name="username" placeholder="username" autocomplete="username" autofocus style="display:block;width:100%;margin:0 0 10px;padding:9px 11px;background:#060f18;border:1px solid rgba(127,176,224,.25);border-radius:7px;color:#eaf4ff;box-sizing:border-box">` +
-		`<input name="password" type="password" placeholder="password" autocomplete="current-password" style="display:block;width:100%;margin:0 0 16px;padding:9px 11px;background:#060f18;border:1px solid rgba(127,176,224,.25);border-radius:7px;color:#eaf4ff;box-sizing:border-box">` +
-		`<button type="submit" style="width:100%;padding:9px;border:0;border-radius:7px;background:linear-gradient(180deg,#bcd6ee,#3f7fc0);color:#08131f;font-weight:600;cursor:pointer">Sign in</button>` +
-		`</form></body>`))
+	_, _ = w.Write([]byte(`<!doctype html><html><head><meta charset="utf-8"><title>gopaste admin</title>` +
+		`<meta name="robots" content="noindex,nofollow"><link rel="stylesheet" href="/auth.css"></head>` +
+		`<body class="auth-body">` +
+		`<form class="auth-card" method="post" action="/admin/login">` +
+		`<h1 class="auth-title">gopaste // admin</h1>` + banner +
+		`<input class="auth-input" name="username" placeholder="username" autocomplete="username" autofocus>` +
+		`<input class="auth-input last" name="password" type="password" placeholder="password" autocomplete="current-password">` +
+		`<button class="auth-btn" type="submit">Sign in</button>` +
+		`</form></body></html>`))
 }
 
 func htmlEscape(s string) string {

@@ -239,10 +239,12 @@ func (m *Manager) clearTempCookie(w http.ResponseWriter, name string) {
 // landing). Minimal and self-contained so it needs no gated assets.
 func renderLoggedOut(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(`<!doctype html><meta charset="utf-8"><title>signed out</title>` +
-		`<body style="font-family:system-ui;background:#060f18;color:#cfe0f0;display:grid;place-items:center;height:100vh;margin:0">` +
-		`<div style="text-align:center"><p style="font-size:1.1rem">Signed out of the gopaste admin console.</p>` +
-		`<p><a style="color:#7fb0e0" href="/admin/login">Sign in again</a> &middot; <a style="color:#7fb0e0" href="/">Back to gopaste</a></p></div>`))
+	_, _ = w.Write([]byte(`<!doctype html><html><head><meta charset="utf-8"><title>signed out</title>` +
+		`<meta name="robots" content="noindex,nofollow"><link rel="stylesheet" href="/auth.css"></head>` +
+		`<body class="auth-body"><div class="auth-msg">` +
+		`<p>Signed out of the gopaste admin console.</p>` +
+		`<p><a class="auth-link" href="/admin/login">Sign in again</a> &middot; ` +
+		`<a class="auth-link" href="/">Back to gopaste</a></p></div></body></html>`))
 }
 
 // containsFold reports case-sensitive membership of want in groups.
