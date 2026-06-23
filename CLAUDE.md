@@ -32,7 +32,7 @@ with assets embedded.
 | `internal/keygen/` | random / phonetic / dictionary key generators (crypto/rand) |
 | `internal/handler/` | routes, middleware chain, rate limit, security headers |
 | `web/` | `embed.go` + `static/` (index.html, app.css/js, fonts, highlight.js) |
-| `docs/` | DESIGN.md + `mocks/` (UI previews, served via report-viewer) |
+| `docs/` | DESIGN.md (architecture + API contract) |
 | `Dockerfile` | multi-stage -> distroless static |
 | `.github/workflows/build-image.yml` | GHCR image CI |
 
@@ -58,12 +58,11 @@ with assets embedded.
 
 ## Deployment (lives in another repo)
 
-The Helm chart that deploys this is in **`Rake-Pro/GitOps-ArgoCD`** (the `paste`
-Application, namespace `apps`). It uses PostgreSQL (ExternalSecret from GSM).
-Cutover = point that chart's image at `ghcr.io/rake-pro/gopaste`, add a GHCR
-pull secret, keep `STORAGE_TYPE=postgres` + the same DB secret. Verify the live
-`entries` schema before cutover (see DESIGN sec 4.2). The chart directory still
-carries its legacy name and should be renamed to `gopaste` (see BACKLOG).
+Live at **paste.rake.pro**. The Helm chart is in **`Rake-Pro/GitOps-ArgoCD`**
+at `cluster-apps/gopaste` (the `paste` Application, namespace `apps`): image
+`ghcr.io/rake-pro/gopaste:latest` rolled by ArgoCD Image Updater (digest),
+`STORAGE_TYPE=postgres` with credentials from an ExternalSecret (GSM), behind
+NPM + Traefik with `TRUSTED_PROXY_COUNT=2`. No volumes (assets are embedded).
 
 ## Conventions
 

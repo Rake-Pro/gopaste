@@ -38,6 +38,7 @@ type Handler struct {
 	cfg        config.Config
 	store      store.Store
 	keygen     keygen.Generator
+	limiter    *rateLimiter
 	staticKeys map[string]bool // preloaded docs (e.g. "about") that never expire
 	assets     fs.FS
 	indexHTML  []byte
@@ -56,6 +57,7 @@ func New(cfg config.Config, s store.Store, gen keygen.Generator, staticKeys map[
 		cfg:        cfg,
 		store:      s,
 		keygen:     gen,
+		limiter:    newRateLimiter(cfg.RateLimit, cfg.TrustedProxyCount),
 		staticKeys: staticKeys,
 		assets:     assets,
 		indexHTML:  index,
@@ -70,7 +72,7 @@ func New(cfg config.Config, s store.Store, gen keygen.Generator, staticKeys map[
 		recoverPanic,
 		requestLogger(cfg.TrustedProxyCount),
 		securityHeaders,
-		newRateLimiter(cfg.RateLimit, cfg.TrustedProxyCount),
+		h.limiter.middleware,
 	)
 	return root, nil
 }
@@ -145,6 +147,13 @@ func (h *Handler) handlePost(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.TrimSpace(data) == "" {
 		writeJSON(w, r, http.StatusBadRequest, map[string]string{"message": "Document cannot be empty."})
+		return
+	}
+	// Byte-budget flood control: bound total accepted paste bytes per client per
+	// rate-limit window (request count alone doesn't, now that pastes can be large).
+	if !h.limiter.chargeBytes(clientIP(r, h.cfg.TrustedProxyCount), len(data), time.Now()) {
+		log.Warn().Int("bytes", len(data)).Msg("client byte budget exceeded")
+		writeJSON(w, r, http.StatusTooManyRequests, map[string]string{"message": "Rate limit exceeded."})
 		return
 	}
 

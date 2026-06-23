@@ -61,6 +61,8 @@ Configuration is read from an optional YAML file (`--config path` or
 | `STORAGE_FILEPATH` | sqlite db file or file-store directory |
 | `PORT` / `HOST` / `LOG_LEVEL` | server bind + log level |
 | `TRUSTED_PROXY_COUNT` | number of trusted reverse proxies in front (see below) |
+| `MAX_LENGTH` | max paste size in bytes (default 150 MB; `0` = unlimited) |
+| `RATE_LIMIT_MAX_BYTES` | accepted paste bytes per client per window (default 600 MB; `0` = off) |
 
 ### Storage backends
 
