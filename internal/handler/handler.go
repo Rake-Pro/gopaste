@@ -1,7 +1,6 @@
 // Package handler wires the HTTP API. Routes are registered in named groups
-// (public now, admin later) and composed through a middleware chain so the
-// planned admin-auth seam (DESIGN sec 8) is a one-line insertion rather than a
-// refactor.
+// (public, and admin when the console is enabled) and composed through a
+// middleware chain; the admin group is gated by internal/auth (DESIGN sec 8).
 package handler
 
 import (
@@ -16,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rake-pro/gopaste/internal/auth"
 	"github.com/rake-pro/gopaste/internal/config"
 	"github.com/rake-pro/gopaste/internal/keygen"
 	"github.com/rake-pro/gopaste/internal/store"
@@ -39,6 +39,7 @@ type Handler struct {
 	store      store.Store
 	keygen     keygen.Generator
 	limiter    *rateLimiter
+	auth       *auth.Manager
 	staticKeys map[string]bool // preloaded docs (e.g. "about") that never expire
 	assets     fs.FS
 	indexHTML  []byte
@@ -48,7 +49,7 @@ type Handler struct {
 // document keys whose reads must not slide expiration. assets is the embedded
 // frontend bundle; the backend depends only on the wire contract, not its
 // contents.
-func New(cfg config.Config, s store.Store, gen keygen.Generator, staticKeys map[string]bool, assets fs.FS) (http.Handler, error) {
+func New(cfg config.Config, s store.Store, gen keygen.Generator, authMgr *auth.Manager, staticKeys map[string]bool, assets fs.FS) (http.Handler, error) {
 	index, err := fs.ReadFile(assets, "index.html")
 	if err != nil {
 		return nil, err
@@ -58,6 +59,7 @@ func New(cfg config.Config, s store.Store, gen keygen.Generator, staticKeys map[
 		store:      s,
 		keygen:     gen,
 		limiter:    newRateLimiter(cfg.RateLimit, cfg.TrustedProxyCount),
+		auth:       authMgr,
 		staticKeys: staticKeys,
 		assets:     assets,
 		indexHTML:  index,
@@ -65,7 +67,9 @@ func New(cfg config.Config, s store.Store, gen keygen.Generator, staticKeys map[
 
 	mux := http.NewServeMux()
 	h.registerPublic(mux)
-	// Future: h.registerAdmin(mux) gated by an auth middleware on that group.
+	if h.auth != nil && h.auth.Enabled() {
+		h.registerAdmin(mux)
+	}
 
 	// HEAD is matched automatically by the GET patterns (net/http 1.22+).
 	root := chain(mux,

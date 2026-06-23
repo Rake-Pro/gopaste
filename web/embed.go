@@ -15,9 +15,16 @@ var staticFS embed.FS
 //go:embed about.md
 var aboutMD []byte
 
+//go:embed admin
+var adminFS embed.FS
+
 // AboutMD returns the embedded "about" document, preloaded into the store under
 // the "about" key as a built-in help page.
 func AboutMD() []byte { return aboutMD }
+
+// AdminFile returns an embedded admin-console asset (e.g. "index.html",
+// "app.css", "app.js"). These are served only behind the auth gate.
+func AdminFile(name string) ([]byte, error) { return adminFS.ReadFile("admin/" + name) }
 
 // Static returns the embedded static asset filesystem rooted at the static
 // directory (so paths are served as "/application.js", not "/static/...").

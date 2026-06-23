@@ -1,9 +1,8 @@
 # gopaste - Admin console authentication
 
-> **Status: planned, not yet implemented.** This documents the intended setup
-> and the config/env contract for the admin console. Tracking: `BACKLOG.md`
-> ("Post-MVP - Admin console + auth") and `docs/DESIGN.md` section 8. The public
-> paste API is unauthenticated and always will be; auth gates only `/admin`.
+> Setup and the config/env contract for the admin console. The public paste API
+> is unauthenticated and always will be; auth gates only `/admin`. Design:
+> `docs/DESIGN.md` section 8.
 
 ## Overview
 

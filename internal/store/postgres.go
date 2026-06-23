@@ -32,8 +32,14 @@ CREATE TABLE IF NOT EXISTS entries (
 	key        varchar(255) NOT NULL,
 	value      text NOT NULL,
 	expiration int,
+	created    int,
 	UNIQUE(key)
 )`
+
+// addCreatedColumn back-fills the admin-console `created` column on tables made
+// before it existed (e.g. the original haste-server schema). Additive and
+// idempotent; pre-existing rows keep NULL created ("unknown" in the console).
+const addCreatedColumn = `ALTER TABLE entries ADD COLUMN IF NOT EXISTS created int`
 
 func newPostgres(ctx context.Context, cfg config.Storage) (*postgresStore, error) {
 	dsn := cfg.URL
@@ -51,6 +57,10 @@ func newPostgres(ctx context.Context, cfg config.Storage) (*postgresStore, error
 	if _, err := pool.Exec(ctx, createEntriesTable); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("postgres init schema: %w", err)
+	}
+	if _, err := pool.Exec(ctx, addCreatedColumn); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("postgres add created column: %w", err)
 	}
 	return &postgresStore{pool: pool, expire: cfg.Expire}, nil
 }
@@ -106,14 +116,15 @@ func (s *postgresStore) Get(ctx context.Context, key string, bumpExpiry bool) (s
 }
 
 func (s *postgresStore) Set(ctx context.Context, key, data string) error {
+	now := time.Now().Unix()
 	var expiration *int64
 	if s.expire > 0 {
-		exp := time.Now().Unix() + int64(s.expire)
+		exp := now + int64(s.expire)
 		expiration = &exp
 	}
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO entries (key, value, expiration) VALUES ($1, $2, $3)`,
-		key, data, expiration,
+		`INSERT INTO entries (key, value, expiration, created) VALUES ($1, $2, $3, $4)`,
+		key, data, expiration, now,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -123,6 +134,62 @@ func (s *postgresStore) Set(ctx context.Context, key, data string) error {
 		return fmt.Errorf("postgres set: %w", err)
 	}
 	return nil
+}
+
+func (s *postgresStore) List(ctx context.Context, limit int) ([]PasteMeta, error) {
+	if limit <= 0 {
+		limit = DefaultListLimit
+	}
+	now := time.Now().Unix()
+	rows, err := s.pool.Query(ctx,
+		`SELECT key, octet_length(value), created, expiration FROM entries
+		 WHERE expiration IS NULL OR expiration > $1
+		 ORDER BY id DESC LIMIT $2`, now, limit)
+	if err != nil {
+		return nil, fmt.Errorf("postgres list: %w", err)
+	}
+	defer rows.Close()
+
+	var out []PasteMeta
+	for rows.Next() {
+		var m PasteMeta
+		if err := rows.Scan(&m.Key, &m.Size, &m.Created, &m.Expiration); err != nil {
+			return nil, fmt.Errorf("postgres list scan: %w", err)
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+func (s *postgresStore) Delete(ctx context.Context, key string) (bool, error) {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM entries WHERE key = $1`, key)
+	if err != nil {
+		return false, fmt.Errorf("postgres delete: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+func (s *postgresStore) Stats(ctx context.Context) (Stats, error) {
+	now := time.Now().Unix()
+	var st Stats
+	err := s.pool.QueryRow(ctx,
+		`SELECT count(*), coalesce(sum(octet_length(value)), 0) FROM entries
+		 WHERE expiration IS NULL OR expiration > $1`, now,
+	).Scan(&st.Count, &st.Bytes)
+	if err != nil {
+		return Stats{}, fmt.Errorf("postgres stats: %w", err)
+	}
+	return st, nil
+}
+
+func (s *postgresStore) PurgeExpired(ctx context.Context) (int, error) {
+	now := time.Now().Unix()
+	tag, err := s.pool.Exec(ctx,
+		`DELETE FROM entries WHERE expiration IS NOT NULL AND expiration <= $1`, now)
+	if err != nil {
+		return 0, fmt.Errorf("postgres purge: %w", err)
+	}
+	return int(tag.RowsAffected()), nil
 }
 
 func (s *postgresStore) Close() error {

@@ -44,7 +44,7 @@ storage:
   # --- sqlite / file ---
   path: ""             # STORAGE_FILEPATH: sqlite db file, or file-store directory
 
-# auth:                  # planned admin console - NOT YET IMPLEMENTED.
+# auth:                  # admin console (disabled by default).
 #                        # Gates only /admin; the paste API stays public.
 #                        # Setup guide: docs/AUTH.md. Design: docs/DESIGN.md sec 8.
 #   mode: disabled       # AUTH_MODE: disabled | oidc | local

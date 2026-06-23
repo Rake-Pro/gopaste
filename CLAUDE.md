@@ -75,7 +75,8 @@ NPM + Traefik with `TRUSTED_PROXY_COUNT=2`. No volumes (assets are embedded).
 
 ## Known notes
 
-- The public paste API is unauthenticated. An admin console with auth is planned
-  post-MVP - the middleware chain + named route groups + an `auth` config block
-  are the reserved seam (DESIGN sec 8).
+- The public paste API is unauthenticated. An optional admin console at `/admin`
+  (`internal/auth`, disabled by default via `auth.mode`) adds OIDC or local auth
+  for list/delete/purge; hidden (404 to non-admins), server-side sessions. See
+  DESIGN sec 8 and docs/AUTH.md.
 - A license has not been chosen yet (tracked in BACKLOG).

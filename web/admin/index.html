@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="rake">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>gopaste // admin</title>
+<link rel="stylesheet" href="/fonts.css">
+<link rel="stylesheet" href="/admin/app.css">
+<link rel="icon" href="/favicon.ico">
+</head>
+<body>
+<div class="wrap">
+  <div class="cmd-bar">
+    <div class="mark">G</div>
+    <div class="cmd-name">gopaste<span>//</span></div>
+    <div class="tag">admin</div>
+    <div class="spacer"></div>
+    <div class="idchip"><span class="led"></span><span id="who">...</span></div>
+    <button class="theme-btn" id="themeBtn">[ theme: rake ]</button>
+    <a class="btn danger" href="/admin/logout">Logout</a>
+  </div>
+
+  <div class="toolbar">
+    <div class="search"><span class="ic">/</span><input id="filter" placeholder="filter by key..." autocomplete="off"></div>
+    <div class="stat" id="stat">loading...</div>
+    <button class="btn ghost" id="purgeBtn">Purge expired</button>
+    <button class="btn ghost" id="refreshBtn">Refresh</button>
+  </div>
+
+  <div class="panel">
+    <table>
+      <thead>
+        <tr><th>Key</th><th>Size</th><th>Created</th><th>Expires</th><th style="text-align:right">Actions</th></tr>
+      </thead>
+      <tbody id="rows"><tr><td colspan="5" class="muted" style="padding:18px 16px">loading...</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="foot-note"><span class="led blue"></span><span id="footnote"></span></div>
+</div>
+
+<div class="statusbar">
+  <span class="seg"><span class="mode">ADMIN</span></span>
+  <span class="seg">pastes <b id="sbCount">-</b></span>
+  <span class="seg">size <b id="sbBytes">-</b></span>
+  <span class="spacer" style="flex:1"></span>
+  <span class="seg" id="sbUser">-</span>
+</div>
+
+<div id="toast" class="toast"></div>
+<script src="/admin/app.js"></script>
+</body>
+</html>

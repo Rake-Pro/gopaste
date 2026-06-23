@@ -227,47 +227,36 @@ config.example.yaml        documented sample config
 Frontend assets are compiled into the binary via `embed.FS`, so deployment is a
 single artifact with no external file dependencies.
 
-## 8. Admin console and auth (planned)
+## 8. Admin console and auth
 
-Not built yet, but the architecture leaves clean seams so adding it later is
-wiring, not surgery.
-
-Intended shape:
-
-- A separate route group (e.g. `/admin`, `/admin/api/*`) for management:
-  listing/searching pastes, deleting abusive content, viewing stats, purging
-  expired rows. The public paste API stays unauthenticated; only the admin
-  group is gated.
+An optional admin console at `/admin` (UI + `/admin/api/*`) for listing,
+searching, deleting pastes, viewing stats and purging expired rows. The public
+paste API stays unauthenticated; only the admin group is gated. Disabled by
+default (`auth.mode`). Implemented in `internal/auth`; setup in `docs/AUTH.md`.
 
 Auth strategy (native OIDC + local fallback):
 
-- An `Authenticator` interface (`Authenticate(r *http.Request) (Identity, bool)`)
-  plus a middleware that wraps the admin route group. Public routes never touch it.
-- Planned implementations:
-  - `oidc` (primary): gopaste is itself the OIDC client - it runs the auth-code
-    flow against Authentik (discovery via the issuer), validates the ID token
-    (state + nonce, PKCE), reads the groups claim, and admits only members of
-    the configured admin group. A signed session cookie carries the session
-    after login.
-  - `local` (fallback): one or more admin credentials (username + password hash)
-    from config/env, for self-hosters without an IdP.
-- Identity carries user id + groups so authorization (admin-group membership) is
-  expressible without another refactor.
-- The console is admin-only and hidden: no admin entry point is exposed in the
-  public UI, and `/admin` returns 404 to anonymous/non-admin requests so its
-  existence isn't disclosed.
+- `oidc` (primary): gopaste is itself the OIDC client - it runs the auth-code
+  flow against the IdP (discovery via the issuer) as a confidential client with
+  PKCE (S256), validates the ID token (state + nonce), reads the groups claim,
+  and admits only members of the configured admin group.
+- `local` (fallback): bcrypt admin credentials from config, for self-hosters
+  without an IdP.
+- `Identity` carries user id + groups so authorization is admin-group membership.
 
-Design implications enforced now (so the seam exists in MVP):
+Sessions and routing:
 
-- HTTP handlers are composed through a middleware chain
-  (`func(http.Handler) http.Handler`), and routes are registered in named
-  groups (`public`, future `admin`). Adding an auth middleware to the admin
-  group is then a one-line insertion.
-- The `Store` interface is the single data path; admin features (list, delete)
-  will extend it later. Backends centralize their queries so adding methods is
-  local.
-- Config has room for an `auth` section (mode + provider settings) even though
-  it is currently disabled.
+- Server-side, revocable sessions (in-process map): the cookie holds only an
+  opaque, HMAC-signed id (`AUTH_SESSION_KEY`); identity/groups never leave the
+  server, and logout/expiry revoke immediately. Cookie is `Secure`, `HttpOnly`,
+  `SameSite=Lax`, scoped to `/admin`. Sessions reset on restart (single pod).
+- Routes: `/admin` (console), `/admin/login`, `/admin/callback`,
+  `/admin/logout` (RP-initiated logout in OIDC mode), `/admin/api/*`.
+- Hidden: the UI returns 404 to anonymous/non-admin (the API returns 401 so the
+  console JS can redirect to login), so the console's existence isn't disclosed.
+
+The handler middleware chain and the `Store` interface (extended with
+`List`/`Delete`/`Stats`/`PurgeExpired`) were the reserved seams this slots into.
 
 ## 9. Deployment
 
