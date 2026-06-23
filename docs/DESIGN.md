@@ -239,20 +239,23 @@ Intended shape:
   expired rows. The public paste API stays unauthenticated; only the admin
   group is gated.
 
-Auth strategy (pluggable, decided later):
+Auth strategy (native OIDC + local fallback):
 
-- An `Authenticator` interface with at minimum
-  `Authenticate(r *http.Request) (Identity, bool)` and a middleware that wraps
-  the admin route group. Public routes never touch it.
+- An `Authenticator` interface (`Authenticate(r *http.Request) (Identity, bool)`)
+  plus a middleware that wraps the admin route group. Public routes never touch it.
 - Planned implementations:
-  - `static` / dev: a single admin credential (user+password or token) from
-    config/env, for local and bootstrap use.
-  - `forward-auth` / OIDC: trust an upstream proxy (Authentik, or any
-    forward-auth provider) via signed headers (e.g. `X-Forwarded-User`,
-    `X-Forwarded-Groups`) or an OIDC token, matching how other rake.pro apps
-    are fronted. gopaste authorizes; the provider authenticates.
-- Identity carries user id + groups/roles so authorization is expressible
-  without another refactor.
+  - `oidc` (primary): gopaste is itself the OIDC client - it runs the auth-code
+    flow against Authentik (discovery via the issuer), validates the ID token
+    (state + nonce, PKCE), reads the groups claim, and admits only members of
+    the configured admin group. A signed session cookie carries the session
+    after login.
+  - `local` (fallback): one or more admin credentials (username + password hash)
+    from config/env, for self-hosters without an IdP.
+- Identity carries user id + groups so authorization (admin-group membership) is
+  expressible without another refactor.
+- The console is admin-only and hidden: no admin entry point is exposed in the
+  public UI, and `/admin` returns 404 to anonymous/non-admin requests so its
+  existence isn't disclosed.
 
 Design implications enforced now (so the seam exists in MVP):
 

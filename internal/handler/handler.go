@@ -1,6 +1,6 @@
 // Package handler wires the HTTP API. Routes are registered in named groups
 // (public now, admin later) and composed through a middleware chain so the
-// planned admin-auth seam (DESIGN sec 9) is a one-line insertion rather than a
+// planned admin-auth seam (DESIGN sec 8) is a one-line insertion rather than a
 // refactor.
 package handler
 

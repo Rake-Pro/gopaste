@@ -45,10 +45,10 @@ type RateLimit struct {
 	MaxBytes      int `yaml:"maxBytes"` // accepted paste bytes per client per window; 0 disables
 }
 
-// Auth is a placeholder for the post-MVP admin auth seam (see DESIGN sec 9).
+// Auth is a placeholder for the planned admin auth seam (see DESIGN sec 8).
 // v1 leaves it disabled.
 type Auth struct {
-	Mode string `yaml:"mode"` // "" (disabled) | static | forward-auth | oidc
+	Mode string `yaml:"mode"` // "" (disabled) | oidc | local
 }
 
 // Config is the fully resolved application configuration.
