@@ -54,6 +54,7 @@ storage:
 #     clientID: ""       # OIDC_CLIENT_ID
 #     clientSecret: ""   # OIDC_CLIENT_SECRET
 #     redirectURL: ""    # OIDC_REDIRECT_URL: https://<host>/admin/callback
+#     postLogoutRedirectURL: "" # OIDC_POST_LOGOUT_REDIRECT_URL: https://<host>/admin/logout
 #     adminGroup: ""     # OIDC_ADMIN_GROUP: only members of this group are admitted
 #     groupsClaim: groups # OIDC_GROUPS_CLAIM: claim carrying group names
 #   local:               # mode: local - for self-hosters without an IdP

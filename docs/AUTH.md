@@ -12,6 +12,19 @@ and hidden**: there is no admin entry point in the public UI, and `/admin`
 returns 404 to anonymous or non-admin requests so its existence is not
 disclosed. Auth is **disabled by default**; enable it with `auth.mode`.
 
+### Routes
+
+| Path             | Purpose                                                          |
+|------------------|------------------------------------------------------------------|
+| `/admin`         | console UI (admin-only; 404 to others)                           |
+| `/admin/api/*`   | management API                                                   |
+| `/admin/login`   | starts login (OIDC auth-code flow, or the local form)            |
+| `/admin/callback`| OIDC redirect URI                                                |
+| `/admin/logout`  | clears the session; in `oidc` mode triggers RP-initiated logout at the IdP, then lands back here |
+
+Both `/admin/callback` and `/admin/logout` must be registered as allowed
+redirect URIs at the IdP.
+
 Two modes:
 
 - `oidc` (recommended): gopaste is itself the OpenID Connect client. It runs the
@@ -34,6 +47,7 @@ Config keys (YAML), each with an environment override (env wins):
 | `auth.oidc.clientID`     | `OIDC_CLIENT_ID`      |                                                |
 | `auth.oidc.clientSecret` | `OIDC_CLIENT_SECRET`  | confidential client secret                     |
 | `auth.oidc.redirectURL`  | `OIDC_REDIRECT_URL`   | `https://<host>/admin/callback`                |
+| `auth.oidc.postLogoutRedirectURL` | `OIDC_POST_LOGOUT_REDIRECT_URL` | `https://<host>/admin/logout`; landing after RP-initiated logout |
 | `auth.oidc.adminGroup`   | `OIDC_ADMIN_GROUP`    | only members of this group are admitted        |
 | `auth.oidc.groupsClaim`  | `OIDC_GROUPS_CLAIM`   | claim holding group names (default `groups`)   |
 
@@ -60,7 +74,8 @@ htpasswd -nbB admin 'your-password'           # -> admin:$2y$12$...  (use the ha
 
 1. Create a **confidential** OIDC application/client in your IdP. Record the
    client ID and client secret.
-2. Set the redirect / callback URL to `https://<your-host>/admin/callback`.
+2. Register both redirect URIs: callback `https://<your-host>/admin/callback`
+   and post-logout `https://<your-host>/admin/logout`.
 3. Make sure the IdP emits a **groups claim** (often needs a `groups` scope or a
    property mapping). Decide which group means "gopaste admin".
 4. Enable PKCE (S256) on the client if your IdP makes it optional - gopaste
@@ -77,7 +92,8 @@ gopaste discovers the authorization/token/JWKS endpoints from
   ID token is JWKS-verifiable).
 - Application slug `gopaste` -> issuer `https://<authentik-host>/application/o/gopaste/`
   (trailing slash required).
-- Redirect URI `https://<your-host>/admin/callback`.
+- Redirect URIs `https://<your-host>/admin/callback` and
+  `https://<your-host>/admin/logout` (post-logout).
 - Scopes `openid email profile` plus a groups scope/mapping so `groups` carries
   the user's group names; set `OIDC_ADMIN_GROUP` to the admin group's name.
 

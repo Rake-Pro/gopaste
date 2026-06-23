@@ -34,8 +34,9 @@ DESIGN sec 8.
 - [ ] Session: signed Secure/HttpOnly/SameSite cookie; login / logout; bounded TTL.
 
 ### Route group + UI (admin-only, hidden)
-- [ ] `registerAdmin`: `/admin` (UI) + `/admin/api/*` (management) + login /
-      callback / logout, all behind the auth middleware.
+- [ ] `registerAdmin`: `/admin` (UI) + `/admin/api/*` (management) +
+      `/admin/login` + `/admin/callback` + `/admin/logout` (RP-initiated logout,
+      post-logout redirect back to `/admin/logout`), all behind the auth middleware.
 - [ ] Hide the console from non-admins: no admin entry point in the public UI;
       `/admin` returns 404 (not 403) to anonymous/non-admin so its existence
       isn't disclosed. Gate server-side, not just client-side.
