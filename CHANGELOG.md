@@ -89,5 +89,5 @@ Versioning aims to follow [Semantic Versioning](https://semver.org/).
 
 ### Notes
 - Backends are always compiled in (sqlite included) for a single build with all
-  three. The public paste API is unauthenticated; an admin console with auth is
-  planned post-MVP. A license has not been chosen yet.
+  three. The public paste API is unauthenticated; the optional admin console
+  (above) gates only `/admin`. A license has not been chosen yet.

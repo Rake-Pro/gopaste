@@ -26,7 +26,8 @@ Non-goals:
 - Storage backends beyond postgres/sqlite/file. The storage interface leaves
   room to add more later.
 - End-user authentication / multi-user paste ownership. The public paste API is
-  unauthenticated. (An admin console with auth is planned - see section 8.)
+  unauthenticated. (The admin-only console - section 8 - is separate; it gates
+  only `/admin`, not the paste API.)
 - A finalized frontend. The shipped brand-themed UI is stable, but the backend
   depends only on the API contract (section 3), not on any specific markup, so
   the asset bundle is swappable.

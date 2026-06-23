@@ -87,8 +87,10 @@ gopaste discovers the authorization/token/JWKS endpoints from
 
 ### Authentik example
 
-- Provider: **OAuth2/OpenID**, confidential client, RS256 signing key (so the
-  ID token is JWKS-verifiable).
+- Provider: **OAuth2/OpenID**, confidential client, RS256 **Signing Key** (so the
+  ID token is JWKS-verifiable). *Leave the **Encryption Key** unset* - gopaste
+  (via go-oidc) accepts only signed (JWS) ID tokens, not encrypted (JWE) ones;
+  setting it yields `malformed jwt: ... must have three parts` at callback.
 - Application slug `gopaste` -> issuer `https://<authentik-host>/application/o/gopaste/`
   (trailing slash required).
 - Redirect URIs `https://<your-host>/admin/callback` and
