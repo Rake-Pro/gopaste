@@ -1,5 +1,7 @@
 # gopaste
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A small, dependency-light pastebin written in Go. It serves a single static
 binary - HTTP API, pluggable storage, and an embedded themeable frontend -
 with no external runtime dependencies.
@@ -107,4 +109,4 @@ GOPASTE_TEST_PG='postgres://user:pass@localhost:5432/gopaste_test' go test ./int
 
 ## License
 
-To be added.
+MIT - see [`LICENSE`](LICENSE).
