@@ -28,6 +28,15 @@ theme:                 # frontend theming (see docs/DESIGN.md sec 5.1)
                        # defining a [data-theme="name"] block; served at /themes,
                        # overlaid over the built-ins. Empty disables the overlay.
 
+security:              # response security headers. Defaults are strict
+                       # (same-origin, no CORS); loosen only to embed gopaste.
+  frameAncestors: "'self'"  # CSP_FRAME_ANCESTORS: CSP frame-ancestors value,
+                       # e.g. "'none'" or "https://wiki.example.com". When not
+                       # "'self'", the legacy X-Frame-Options header is dropped
+                       # so the CSP governs framing.
+  corsOrigins: []      # CORS_ORIGINS (comma-separated env): origins allowed
+                       # cross-origin API access. Empty disables CORS; "*" = any.
+
 rateLimits:
   totalRequests: 500   # per-client requests allowed per window; 0 disables
   every: 60000         # window length, milliseconds
@@ -57,6 +66,8 @@ storage:
 #                        # Setup guide: docs/AUTH.md. Design: docs/DESIGN.md sec 8.
 #   mode: disabled       # AUTH_MODE: disabled | oidc | local
 #   sessionKey: ""       # AUTH_SESSION_KEY: random >=32 bytes; signs the session cookie
+#   loginRateLimit: 10   # AUTH_LOGIN_RATE_LIMIT: POST /admin/login attempts per
+#                        # IP per minute (local mode brute-force guard); default 10
 #   oidc:                # mode: oidc - native confidential client + PKCE (S256)
 #     issuer: ""         # OIDC_ISSUER: e.g. https://auth.example.com/application/o/gopaste/
 #     clientID: ""       # OIDC_CLIENT_ID

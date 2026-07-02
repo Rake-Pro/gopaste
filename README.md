@@ -74,6 +74,9 @@ auth for listing and deleting pastes; setup and the config contract are in
 | `THEME_DEFAULT` | theme for first-time visitors (default `rake`) |
 | `THEME_FORCED` | lock this theme and hide the switcher (default unset) |
 | `THEME_DIR` | external directory of drop-in `*.css` themes (default unset) |
+| `CSP_FRAME_ANCESTORS` | CSP `frame-ancestors` value for embedding (default `'self'`) |
+| `CORS_ORIGINS` | comma-separated CORS allowlist for the API (default: CORS off) |
+| `AUTH_LOGIN_RATE_LIMIT` | `POST /admin/login` attempts per IP per minute (default 10) |
 
 ### Storage backends
 

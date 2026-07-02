@@ -8,6 +8,12 @@ Versioning aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Security
+- Postgres DSN secrets kept out of logs: connect/ping error paths now redact the
+  password and strip any verbatim DSN that a pgx parse error might echo
+  (`redactDSN`/`scrubDSN`).
+- Dedicated brute-force throttle on `POST /admin/login` (local auth): a
+  per-client-IP limiter separate from the global paste limiter
+  (`auth.loginRateLimit` / `AUTH_LOGIN_RATE_LIMIT`, default 10/min).
 - Hardened ahead of public launch (post-review):
   - Reject empty/whitespace-only pastes server-side (`POST /documents` -> 400).
   - Rate limiter / logging now resist X-Forwarded-For spoofing: the client IP is
@@ -39,6 +45,13 @@ Versioning aims to follow [Semantic Versioning](https://semver.org/).
     All inline `style=` attributes moved to stylesheets; runtime show/hide uses
     the CSSOM (`el.style`), which `style-src` does not govern. Admin login /
     signed-out pages styled via the new public `/auth.css`.
+
+### Added
+- Configurable framing/CORS for embedding (`security.*`): CSP `frame-ancestors`
+  via `security.frameAncestors` / `CSP_FRAME_ANCESTORS` (the legacy
+  `X-Frame-Options` header is dropped once it is customized), and a CORS
+  allowlist via `security.corsOrigins` / `CORS_ORIGINS` (empty = CORS off,
+  preflight `OPTIONS` handled). Defaults stay strict same-origin.
 
 ### Changed
 - Maximum paste size raised to 150 MB (`maxLength`, was ~390 KB) and now

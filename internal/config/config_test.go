@@ -54,3 +54,41 @@ func TestThemeInvalidNameRejected(t *testing.T) {
 		t.Fatal("expected error for unsafe theme.default")
 	}
 }
+
+func TestSecurityDefaults(t *testing.T) {
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Security.FrameAncestors != "'self'" || len(cfg.Security.CORSOrigins) != 0 {
+		t.Fatalf("security defaults = %+v", cfg.Security)
+	}
+}
+
+func TestSecurityEnvOverride(t *testing.T) {
+	t.Setenv("CSP_FRAME_ANCESTORS", "https://wiki.example.com")
+	t.Setenv("CORS_ORIGINS", "https://a.example.com, https://b.example.com ,")
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Security.FrameAncestors != "https://wiki.example.com" {
+		t.Fatalf("frame-ancestors = %q", cfg.Security.FrameAncestors)
+	}
+	if len(cfg.Security.CORSOrigins) != 2 ||
+		cfg.Security.CORSOrigins[0] != "https://a.example.com" ||
+		cfg.Security.CORSOrigins[1] != "https://b.example.com" {
+		t.Fatalf("cors origins = %v (blanks should be dropped)", cfg.Security.CORSOrigins)
+	}
+}
+
+func TestLoginRateLimitDefault(t *testing.T) {
+	a := Auth{Mode: "local", SessionKey: "sixteenbytekey!!",
+		Local: LocalAuth{Admins: []LocalAdmin{{Username: "admin", PasswordHash: "h"}}}}
+	if err := a.normalize(); err != nil {
+		t.Fatal(err)
+	}
+	if a.LoginRateLimit != 10 {
+		t.Fatalf("LoginRateLimit = %d, want default 10", a.LoginRateLimit)
+	}
+}

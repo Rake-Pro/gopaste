@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -48,21 +49,52 @@ func newPostgres(ctx context.Context, cfg config.Storage) (*postgresStore, error
 	}
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
-		return nil, fmt.Errorf("postgres connect: %w", err)
+		return nil, fmt.Errorf("postgres connect (%s): %s", redactDSN(dsn), scrubDSN(err.Error(), dsn))
 	}
 	if err := pool.Ping(ctx); err != nil {
 		pool.Close()
-		return nil, fmt.Errorf("postgres ping: %w", err)
+		return nil, fmt.Errorf("postgres ping (%s): %s", redactDSN(dsn), scrubDSN(err.Error(), dsn))
 	}
 	if _, err := pool.Exec(ctx, createEntriesTable); err != nil {
 		pool.Close()
-		return nil, fmt.Errorf("postgres init schema: %w", err)
+		return nil, fmt.Errorf("postgres init schema: %s", scrubDSN(err.Error(), dsn))
 	}
 	if _, err := pool.Exec(ctx, addCreatedColumn); err != nil {
 		pool.Close()
-		return nil, fmt.Errorf("postgres add created column: %w", err)
+		return nil, fmt.Errorf("postgres add created column: %s", scrubDSN(err.Error(), dsn))
 	}
 	return &postgresStore{pool: pool, expire: cfg.Expire}, nil
+}
+
+// redactDSN returns dsn with the password masked, safe for logs and errors.
+// Best-effort: an unparseable DSN is returned unchanged (scrubDSN still strips
+// the raw secret from any error text).
+func redactDSN(dsn string) string {
+	u, err := url.Parse(dsn)
+	if err != nil || u.User == nil {
+		return dsn
+	}
+	if _, hasPw := u.User.Password(); hasPw {
+		u.User = url.UserPassword(u.User.Username(), "xxxxx")
+	}
+	return u.String()
+}
+
+// scrubDSN removes DSN secrets from an error message before it is surfaced:
+// any verbatim DSN is replaced with its redacted form, and any bare password is
+// masked. pgx parse errors can echo the whole connection string, so connect and
+// ping errors must pass through here rather than being wrapped raw.
+func scrubDSN(msg, dsn string) string {
+	if dsn == "" {
+		return msg
+	}
+	msg = strings.ReplaceAll(msg, dsn, redactDSN(dsn))
+	if u, err := url.Parse(dsn); err == nil && u.User != nil {
+		if pw, ok := u.User.Password(); ok && pw != "" {
+			msg = strings.ReplaceAll(msg, pw, "xxxxx")
+		}
+	}
+	return msg
 }
 
 // buildDSN assembles a postgres URL from discrete STORAGE_* parts.

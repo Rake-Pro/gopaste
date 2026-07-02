@@ -203,6 +203,9 @@ Two layers, env wins (so the deployment's injected secrets are authoritative):
 | `THEME_DEFAULT`          | theme.default      |
 | `THEME_FORCED`           | theme.forced       |
 | `THEME_DIR`              | theme.dir (external theme overlay) |
+| `AUTH_LOGIN_RATE_LIMIT`  | auth.loginRateLimit (POST /admin/login attempts per IP/min) |
+| `CSP_FRAME_ANCESTORS`    | security.frameAncestors (CSP frame-ancestors) |
+| `CORS_ORIGINS`           | security.corsOrigins (comma-separated CORS allowlist) |
 
 Config is read directly in-process; no credentials are written to disk.
 
@@ -236,6 +239,22 @@ markup references only tokens, so a theme needs no structural changes.
   so first render has no flash. All theme CSS is same-origin, so the strict CSP
   (`style-src 'self'`) is unaffected.
 
+### 5.2 Security headers
+
+The `securityHeaders` middleware sets `X-Content-Type-Options`,
+`Referrer-Policy`, and a Content-Security-Policy that is strict by default
+(`default-src 'self'`, no inline script/style). Two knobs relax it for embedding:
+
+- **`security.frameAncestors`** (`CSP_FRAME_ANCESTORS`, default `'self'`) sets
+  the CSP `frame-ancestors` directive. While it is `'self'` the legacy
+  `X-Frame-Options: SAMEORIGIN` header is also sent; once customized that header
+  is omitted (it can only express same-origin/deny and would otherwise override
+  a looser CSP in older browsers).
+- **`security.corsOrigins`** (`CORS_ORIGINS`, default empty) is a CORS
+  allowlist. Empty disables CORS entirely. A request whose `Origin` matches (or
+  `*`) gets `Access-Control-Allow-Origin` echoed plus `Vary: Origin`, and a
+  preflight `OPTIONS` short-circuits with `204`.
+
 ## 6. Logging
 
 Global zerolog logger configured in `main`:
@@ -244,6 +263,9 @@ Global zerolog logger configured in `main`:
 - Level via `LOG_LEVEL` (default `info`).
 - Request logging middleware: method, path, status, duration, client IP. No
   paste bodies are logged.
+- Postgres connection secrets are kept out of logs: connect/ping errors run
+  through `redactDSN`/`scrubDSN` (`internal/store/postgres.go`), which mask the
+  password in the DSN and strip any verbatim DSN a pgx parse error might echo.
 
 ## 7. Project layout
 
@@ -276,7 +298,9 @@ Auth strategy (native OIDC + local fallback):
   PKCE (S256), validates the ID token (state + nonce), reads the groups claim,
   and admits only members of the configured admin group.
 - `local` (fallback): bcrypt admin credentials from config, for self-hosters
-  without an IdP.
+  without an IdP. `POST /admin/login` is throttled per client IP by a dedicated
+  limiter (`auth.loginRateLimit`, default 10/min), independent of the global
+  paste limiter, to blunt credential brute-forcing.
 - `Identity` carries user id + groups so authorization is admin-group membership.
 
 Sessions and routing:

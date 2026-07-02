@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -88,11 +89,25 @@ type RateLimit struct {
 // Auth configures the admin console. It gates only /admin; the paste API stays
 // public. Disabled by default. See DESIGN sec 8 and docs/AUTH.md.
 type Auth struct {
-	Mode       string    `yaml:"mode"`       // "" / "disabled" | "oidc" | "local"
-	SessionKey string    `yaml:"sessionKey"` // signs the opaque session-id cookie (>=16 bytes)
-	SessionTTL int       `yaml:"sessionTTL"` // session lifetime in seconds (default 28800 = 8h)
-	OIDC       OIDCAuth  `yaml:"oidc"`
-	Local      LocalAuth `yaml:"local"`
+	Mode           string    `yaml:"mode"`           // "" / "disabled" | "oidc" | "local"
+	SessionKey     string    `yaml:"sessionKey"`     // signs the opaque session-id cookie (>=16 bytes)
+	SessionTTL     int       `yaml:"sessionTTL"`     // session lifetime in seconds (default 28800 = 8h)
+	LoginRateLimit int       `yaml:"loginRateLimit"` // POST /admin/login attempts per IP per minute; 0 = default 10
+	OIDC           OIDCAuth  `yaml:"oidc"`
+	Local          LocalAuth `yaml:"local"`
+}
+
+// Security tunes the response security headers. Defaults are strict (same-origin
+// only, no CORS); loosen them only to embed gopaste in another origin.
+type Security struct {
+	// FrameAncestors is the CSP frame-ancestors value (e.g. "'self'", "'none'",
+	// or "https://wiki.example.com"). Empty means "'self'". When it is not
+	// "'self'" the legacy X-Frame-Options header is omitted so the CSP governs
+	// framing.
+	FrameAncestors string `yaml:"frameAncestors"`
+	// CORSOrigins is the allowlist of origins permitted cross-origin access to
+	// the API. Empty disables CORS entirely. "*" allows any origin.
+	CORSOrigins []string `yaml:"corsOrigins"`
 }
 
 // OIDCAuth is the native OIDC client config (confidential client + PKCE).
@@ -137,6 +152,9 @@ func (a *Auth) normalize() error {
 	if a.SessionTTL <= 0 {
 		a.SessionTTL = 28800 // 8h
 	}
+	if a.LoginRateLimit <= 0 {
+		a.LoginRateLimit = 10 // attempts per IP per minute
+	}
 	if a.Mode == "oidc" {
 		o := a.OIDC
 		if o.Issuer == "" || o.ClientID == "" || o.ClientSecret == "" || o.RedirectURL == "" || o.AdminGroup == "" {
@@ -171,6 +189,7 @@ type Config struct {
 	Storage      Storage      `yaml:"storage"`
 	Auth         Auth         `yaml:"auth"`
 	Theme        Theme        `yaml:"theme"`
+	Security     Security     `yaml:"security"`
 	LogLevel     string       `yaml:"logLevel"`
 
 	// TrustedProxyCount is how many trusted reverse proxies sit in front of the
@@ -199,6 +218,7 @@ func Defaults() Config {
 		RateLimit:         RateLimit{TotalRequests: 500, Every: 60000, MaxBytes: 629145600},
 		Storage:           Storage{Type: "file", Path: "./data"},
 		Theme:             Theme{Default: "rake"},
+		Security:          Security{FrameAncestors: "'self'"},
 		LogLevel:          "info",
 		TrustedProxyCount: 0,
 	}
@@ -251,6 +271,10 @@ func applyEnv(cfg *Config) {
 	setStr(&cfg.Auth.Mode, "AUTH_MODE")
 	setStr(&cfg.Auth.SessionKey, "AUTH_SESSION_KEY")
 	setInt(&cfg.Auth.SessionTTL, "AUTH_SESSION_TTL")
+	setInt(&cfg.Auth.LoginRateLimit, "AUTH_LOGIN_RATE_LIMIT")
+
+	setStr(&cfg.Security.FrameAncestors, "CSP_FRAME_ANCESTORS")
+	setStrList(&cfg.Security.CORSOrigins, "CORS_ORIGINS")
 	setStr(&cfg.Auth.OIDC.Issuer, "OIDC_ISSUER")
 	setStr(&cfg.Auth.OIDC.ClientID, "OIDC_CLIENT_ID")
 	setStr(&cfg.Auth.OIDC.ClientSecret, "OIDC_CLIENT_SECRET")
@@ -287,4 +311,20 @@ func setInt(dst *int, env string) {
 			*dst = n
 		}
 	}
+}
+
+// setStrList overlays a comma-separated env var onto a string slice. An empty
+// value clears the list. Entries are trimmed; blanks dropped.
+func setStrList(dst *[]string, env string) {
+	v, ok := os.LookupEnv(env)
+	if !ok {
+		return
+	}
+	var out []string
+	for _, p := range strings.Split(v, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	*dst = out
 }

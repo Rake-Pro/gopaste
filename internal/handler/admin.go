@@ -3,11 +3,27 @@ package handler
 import (
 	"net/http"
 	"path"
+	"time"
 
 	"github.com/rake-pro/gopaste/internal/store"
 	"github.com/rake-pro/gopaste/web"
 	"github.com/rs/zerolog/log"
 )
+
+// loginRateLimit throttles POST /admin/login per client IP (config
+// auth.loginRateLimit, default 10/min) with its own window, independent of the
+// global paste limiter, to blunt credential brute-forcing.
+func (h *Handler) loginRateLimit(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if h.loginLimiter.max > 0 && !h.loginLimiter.allow(clientIP(r, h.cfg.TrustedProxyCount), time.Now()) {
+			log.Warn().Str("ip", clientIP(r, h.cfg.TrustedProxyCount)).Msg("admin login rate limited")
+			w.Header().Set("Retry-After", "60")
+			http.Error(w, "Too many login attempts. Try again in a minute.", http.StatusTooManyRequests)
+			return
+		}
+		next(w, r)
+	}
+}
 
 // registerAdmin wires the admin console route group. UI routes are hidden behind
 // GateUI (404 to non-admins); API routes behind GateAPI (401). The auth
@@ -23,7 +39,7 @@ func (h *Handler) registerAdmin(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/logout", m.Logout)
 	mux.HandleFunc("POST /admin/logout", m.Logout)
 	if m.LocalMode() {
-		mux.HandleFunc("POST /admin/login", m.LoginSubmit)
+		mux.HandleFunc("POST /admin/login", h.loginRateLimit(m.LoginSubmit))
 	}
 
 	mux.HandleFunc("GET /admin/api/pastes", m.GateAPI(h.adminListPastes))

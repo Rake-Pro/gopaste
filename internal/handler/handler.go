@@ -35,15 +35,16 @@ func chain(h http.Handler, mws ...Middleware) http.Handler {
 
 // Handler holds the dependencies shared by the route handlers.
 type Handler struct {
-	cfg        config.Config
-	store      store.Store
-	keygen     keygen.Generator
-	limiter    *rateLimiter
-	auth       *auth.Manager
-	staticKeys map[string]bool // preloaded docs (e.g. "about") that never expire
-	assets     fs.FS
-	indexHTML  []byte
-	themeDir   string // external drop-in theme overlay dir; "" when disabled
+	cfg          config.Config
+	store        store.Store
+	keygen       keygen.Generator
+	limiter      *rateLimiter
+	loginLimiter *rateLimiter // dedicated throttle for POST /admin/login
+	auth         *auth.Manager
+	staticKeys   map[string]bool // preloaded docs (e.g. "about") that never expire
+	assets       fs.FS
+	indexHTML    []byte
+	themeDir     string // external drop-in theme overlay dir; "" when disabled
 }
 
 // New builds the fully-wrapped HTTP handler. staticKeys are the preloaded
@@ -63,15 +64,16 @@ func New(cfg config.Config, s store.Store, gen keygen.Generator, authMgr *auth.M
 	log.Info().Strs("themes", themes.names).Str("default", themes.defaultTheme).
 		Str("forced", themes.forcedTheme).Bool("overlay", themes.dir != "").Msg("themes loaded")
 	h := &Handler{
-		cfg:        cfg,
-		store:      s,
-		keygen:     gen,
-		limiter:    newRateLimiter(cfg.RateLimit, cfg.TrustedProxyCount),
-		auth:       authMgr,
-		staticKeys: staticKeys,
-		assets:     assets,
-		indexHTML:  index,
-		themeDir:   themes.dir,
+		cfg:          cfg,
+		store:        s,
+		keygen:       gen,
+		limiter:      newRateLimiter(cfg.RateLimit, cfg.TrustedProxyCount),
+		loginLimiter: newRateLimiter(config.RateLimit{TotalRequests: cfg.Auth.LoginRateLimit, Every: 60000}, cfg.TrustedProxyCount),
+		auth:         authMgr,
+		staticKeys:   staticKeys,
+		assets:       assets,
+		indexHTML:    index,
+		themeDir:     themes.dir,
 	}
 
 	mux := http.NewServeMux()
@@ -84,7 +86,7 @@ func New(cfg config.Config, s store.Store, gen keygen.Generator, authMgr *auth.M
 	root := chain(mux,
 		recoverPanic,
 		requestLogger(cfg.TrustedProxyCount),
-		securityHeaders,
+		h.securityHeaders,
 		h.limiter.middleware,
 	)
 	return root, nil
@@ -288,20 +290,60 @@ func recoverPanic(next http.Handler) http.Handler {
 	})
 }
 
-func securityHeaders(next http.Handler) http.Handler {
+// securityHeaders sets the strict same-origin defaults. The CSP frame-ancestors
+// directive is configurable (config.Security) for embedding, and an optional
+// CORS allowlist opens the API cross-origin; both default to same-origin only.
+func (h *Handler) securityHeaders(next http.Handler) http.Handler {
+	sec := h.cfg.Security
+	frameAncestors := sec.FrameAncestors
+	if frameAncestors == "" {
+		frameAncestors = "'self'"
+	}
+	// All assets are same-origin and self-hosted; no inline scripts or styles.
+	// (Runtime display toggling uses the CSSOM `el.style.prop`, which is not
+	// governed by style-src, so the policy stays strict with no 'unsafe-inline'.)
+	csp := "default-src 'self'; script-src 'self'; style-src 'self'; " +
+		"img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'none'; " +
+		"form-action 'self'; frame-ancestors " + frameAncestors
+	// The legacy X-Frame-Options header can only express same-origin/deny, so
+	// setting it would override a looser frame-ancestors in older browsers. Keep
+	// it only while framing is same-origin; otherwise let the CSP govern.
+	sameOriginFrames := frameAncestors == "'self'"
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+		if sameOriginFrames {
+			w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+		}
 		w.Header().Set("Referrer-Policy", "same-origin")
-		// All assets are same-origin and self-hosted; no inline scripts or styles.
-		// (Runtime display toggling uses the CSSOM `el.style.prop`, which is not
-		// governed by style-src, so the policy stays strict with no 'unsafe-inline'.)
-		w.Header().Set("Content-Security-Policy",
-			"default-src 'self'; script-src 'self'; style-src 'self'; "+
-				"img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'none'; "+
-				"form-action 'self'; frame-ancestors 'self'")
+		w.Header().Set("Content-Security-Policy", csp)
+
+		if origin := r.Header.Get("Origin"); origin != "" {
+			if allow := corsOrigin(sec.CORSOrigins, origin); allow != "" {
+				w.Header().Set("Access-Control-Allow-Origin", allow)
+				w.Header().Add("Vary", "Origin")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, HEAD, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+				if r.Method == http.MethodOptions {
+					w.WriteHeader(http.StatusNoContent)
+					return
+				}
+			}
+		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// corsOrigin returns the Access-Control-Allow-Origin value for origin given the
+// allowlist, or "" when the origin is not allowed. "*" in the list allows any
+// origin (echoed back so the header stays usable with a specific origin).
+func corsOrigin(allowlist []string, origin string) string {
+	for _, a := range allowlist {
+		if a == "*" || a == origin {
+			return origin
+		}
+	}
+	return ""
 }
 
 // statusRecorder captures the response status for logging.

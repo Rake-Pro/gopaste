@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rake-pro/gopaste/internal/config"
@@ -159,4 +160,23 @@ func TestPostgresConformance(t *testing.T) {
 	}
 	defer s.Close()
 	conformance(t, s)
+}
+
+func TestRedactDSN(t *testing.T) {
+	got := redactDSN("postgres://user:secret@host:5432/db")
+	if strings.Contains(got, "secret") {
+		t.Fatalf("redactDSN leaked password: %s", got)
+	}
+	if !strings.Contains(got, "xxxxx") || !strings.Contains(got, "user:") || !strings.Contains(got, "host:5432") {
+		t.Fatalf("redactDSN = %s, want masked password, kept user/host", got)
+	}
+}
+
+func TestScrubDSN(t *testing.T) {
+	dsn := "postgres://user:secret@host:5432/db"
+	msg := "failed to parse " + dsn + " (password=secret)"
+	got := scrubDSN(msg, dsn)
+	if strings.Contains(got, "secret") {
+		t.Fatalf("scrubDSN leaked secret: %s", got)
+	}
 }

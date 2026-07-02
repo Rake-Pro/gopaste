@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/rake-pro/gopaste/internal/keygen"
 	"github.com/rake-pro/gopaste/internal/store"
 	"github.com/rake-pro/gopaste/web"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func newTestServer(t *testing.T) *httptest.Server {
@@ -325,5 +327,129 @@ func TestThemeOverlayTraversalRejected(t *testing.T) {
 	code, ct, _ := get(t, srv.URL+"/themes/..%2f..%2fetc%2fpasswd")
 	if code == 200 && strings.Contains(ct, "text/css") {
 		t.Fatal("traversal should not serve a css file")
+	}
+}
+
+func TestCSPDefaultSameOrigin(t *testing.T) {
+	srv := newTestServer(t)
+	resp, err := http.Get(srv.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if csp := resp.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "frame-ancestors 'self'") {
+		t.Fatalf("CSP = %q", csp)
+	}
+	if resp.Header.Get("X-Frame-Options") != "SAMEORIGIN" {
+		t.Fatal("X-Frame-Options should be SAMEORIGIN by default")
+	}
+}
+
+func TestCSPConfigurableFrameAncestors(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.RateLimit = config.RateLimit{}
+	cfg.Security.FrameAncestors = "https://wiki.example.com"
+	srv := newTestServerCfg(t, cfg)
+	resp, err := http.Get(srv.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if csp := resp.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "frame-ancestors https://wiki.example.com") {
+		t.Fatalf("CSP = %q", csp)
+	}
+	if resp.Header.Get("X-Frame-Options") != "" {
+		t.Fatal("X-Frame-Options must be omitted when framing is customized (else it overrides CSP)")
+	}
+}
+
+func TestCORSDisabledByDefault(t *testing.T) {
+	srv := newTestServer(t)
+	req, _ := http.NewRequest("GET", srv.URL+"/", nil)
+	req.Header.Set("Origin", "https://app.example.com")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.Header.Get("Access-Control-Allow-Origin") != "" {
+		t.Fatal("CORS should be disabled by default")
+	}
+}
+
+func TestCORSAllowlist(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.RateLimit = config.RateLimit{}
+	cfg.Security.CORSOrigins = []string{"https://app.example.com"}
+	srv := newTestServerCfg(t, cfg)
+
+	do := func(method, origin string) *http.Response {
+		req, _ := http.NewRequest(method, srv.URL+"/documents", nil)
+		req.Header.Set("Origin", origin)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+
+	allowed := do("OPTIONS", "https://app.example.com")
+	if allowed.StatusCode != http.StatusNoContent {
+		t.Fatalf("preflight status = %d, want 204", allowed.StatusCode)
+	}
+	if allowed.Header.Get("Access-Control-Allow-Origin") != "https://app.example.com" {
+		t.Fatalf("ACAO = %q", allowed.Header.Get("Access-Control-Allow-Origin"))
+	}
+	allowed.Body.Close()
+
+	denied := do("OPTIONS", "https://evil.example.com")
+	if denied.Header.Get("Access-Control-Allow-Origin") != "" {
+		t.Fatal("disallowed origin must not get CORS headers")
+	}
+	denied.Body.Close()
+}
+
+func TestAdminLoginRateLimited(t *testing.T) {
+	hash, err := bcrypt.GenerateFromPassword([]byte("pw"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	yaml := "" +
+		"auth:\n" +
+		"  mode: local\n" +
+		"  sessionKey: \"sixteenbytekey!!\"\n" +
+		"  loginRateLimit: 2\n" +
+		"  local:\n" +
+		"    admins:\n" +
+		"      - username: admin\n" +
+		"        passwordHash: \"" + string(hash) + "\"\n"
+	path := filepath.Join(t.TempDir(), "cfg.yaml")
+	if err := os.WriteFile(path, []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.RateLimit = config.RateLimit{} // isolate the login limiter from the global one
+	srv := newTestServerCfg(t, cfg)
+
+	// The login limiter runs before credential checks, so bad creds still count.
+	post := func() int {
+		resp, err := http.PostForm(srv.URL+"/admin/login", url.Values{"username": {"admin"}, "password": {"wrong"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if c := post(); c == http.StatusTooManyRequests {
+		t.Fatalf("attempt 1 unexpectedly limited (%d)", c)
+	}
+	if c := post(); c == http.StatusTooManyRequests {
+		t.Fatalf("attempt 2 unexpectedly limited (%d)", c)
+	}
+	if c := post(); c != http.StatusTooManyRequests {
+		t.Fatalf("attempt 3 = %d, want 429", c)
 	}
 }
