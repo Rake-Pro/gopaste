@@ -283,19 +283,35 @@
   };
 
   App.prototype.initTheme = function () {
-    var THEMES = ['rake', 'arctic'];
+    // The server injects the theme config as data-* attributes on <html>:
+    // the available list, the default for new visitors, and an optional forced
+    // theme that locks the switcher. First paint already uses data-theme.
+    var root = document.documentElement;
     var btn = document.getElementById('themeBtn');
+    var THEMES = (root.getAttribute('data-themes') || 'rake').split(',');
+    var deflt = root.getAttribute('data-default-theme') || 'rake';
+    var forced = root.getAttribute('data-forced-theme') || '';
+
+    if (forced) {
+      // Operator-locked theme: apply it, ignore any stored choice, hide the switch.
+      root.setAttribute('data-theme', forced);
+      var seg = btn && btn.closest ? btn.closest('.seg') : null;
+      if (seg) seg.style.display = 'none'; else if (btn) btn.style.display = 'none';
+      return;
+    }
+
     var saved = null;
     try { saved = window.localStorage.getItem('gopaste-theme'); } catch (e) { /* ignore */ }
-    var cur = THEMES.indexOf(saved) >= 0 ? saved : 'rake';
+    var cur = THEMES.indexOf(saved) >= 0 ? saved : deflt;
     function apply(name) {
-      document.documentElement.setAttribute('data-theme', name);
+      root.setAttribute('data-theme', name);
       btn.textContent = 'theme: ' + name;
       try { window.localStorage.setItem('gopaste-theme', name); } catch (e) { /* ignore */ }
     }
     apply(cur);
     btn.addEventListener('click', function () {
-      cur = THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length];
+      var i = THEMES.indexOf(cur);
+      cur = THEMES[(i + 1) % THEMES.length];
       apply(cur);
     });
   };

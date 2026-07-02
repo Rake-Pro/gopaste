@@ -43,6 +43,7 @@ type Handler struct {
 	staticKeys map[string]bool // preloaded docs (e.g. "about") that never expire
 	assets     fs.FS
 	indexHTML  []byte
+	themeDir   string // external drop-in theme overlay dir; "" when disabled
 }
 
 // New builds the fully-wrapped HTTP handler. staticKeys are the preloaded
@@ -54,6 +55,13 @@ func New(cfg config.Config, s store.Store, gen keygen.Generator, authMgr *auth.M
 	if err != nil {
 		return nil, err
 	}
+	themes := discoverThemes(cfg, assets)
+	index, err = renderIndex(index, themes)
+	if err != nil {
+		return nil, err
+	}
+	log.Info().Strs("themes", themes.names).Str("default", themes.defaultTheme).
+		Str("forced", themes.forcedTheme).Bool("overlay", themes.dir != "").Msg("themes loaded")
 	h := &Handler{
 		cfg:        cfg,
 		store:      s,
@@ -63,6 +71,7 @@ func New(cfg config.Config, s store.Store, gen keygen.Generator, authMgr *auth.M
 		staticKeys: staticKeys,
 		assets:     assets,
 		indexHTML:  index,
+		themeDir:   themes.dir,
 	}
 
 	mux := http.NewServeMux()
@@ -220,8 +229,12 @@ func (h *Handler) chooseKey(ctx context.Context) (string, error) {
 // the URL): static passthrough with an index.html fallback.
 func (h *Handler) handleFrontend(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimPrefix(r.URL.Path, "/")
-	if name == "" {
+	if name == "" || name == "index.html" {
+		// index.html is a rendered template (theme injection); never serve it raw.
 		h.serveIndex(w, r)
+		return
+	}
+	if strings.HasPrefix(name, "themes/") && h.serveThemeOverlay(w, r, name) {
 		return
 	}
 	f, err := h.assets.Open(name)

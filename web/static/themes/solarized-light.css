@@ -1,0 +1,23 @@
+/* solarized-light - Solarized palette (light). Like arctic it overrides the
+   chrome that assumes a dark background (statusbar, message toasts). */
+[data-theme="solarized-light"] {
+  --navy-900:#eee8d5; --navy-800:#fdf6e3; --navy-700:#ffffff;
+  --steel-100:#002b36; --steel-300:#586e75; --steel-400:#657b83;
+  --steel-500:#268bd2; --steel-700:#93a1a1;
+  --green:#859900; --green-bright:#6f8000;
+  --ink:#586e75; --ink-dim:#657b83; --ink-faint:#93a1a1;
+  --glow:rgba(38,139,210,.22);
+  --line:rgba(88,110,117,.16);
+  --line-strong:rgba(88,110,117,.32);
+  --panel:linear-gradient(180deg,rgba(255,255,255,.92),rgba(238,232,213,.92));
+  --bg:
+    radial-gradient(1100px 640px at 50% -12%,rgba(38,139,210,.12),transparent 60%),
+    linear-gradient(180deg,#fdf6e3 0%,#eee8d5 100%);
+  --grid-ink:rgba(88,110,117,.05);
+  --code-bg:rgba(255,255,255,.6);
+  --danger:#dc322f;
+  --syn-key:#268bd2; --syn-str:#2aa198; --syn-num:#d33682;
+  --syn-com:#93a1a1; --syn-fn:#b58900; --syn-punc:#657b83;
+}
+[data-theme="solarized-light"] .statusbar{background:rgba(253,246,227,.7);}
+[data-theme="solarized-light"] #messages li{background:rgba(253,246,227,.97);color:#002b36;}

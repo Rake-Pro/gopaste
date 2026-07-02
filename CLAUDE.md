@@ -79,4 +79,10 @@ NPM + Traefik with `TRUSTED_PROXY_COUNT=2`. No volumes (assets are embedded).
   (`internal/auth`, disabled by default via `auth.mode`) adds OIDC or local auth
   for list/delete/purge; hidden (404 to non-admins), server-side sessions. See
   DESIGN sec 8 and docs/AUTH.md.
-- A license has not been chosen yet (tracked in BACKLOG).
+- Themes are per-file: `web/static/themes/*.css` (one `[data-theme]` block each),
+  `rake` base on `:root` in application.css. `internal/handler/themes.go`
+  discovers them + an optional external `THEME_DIR` overlay (served `/themes`),
+  renders `index.html` as a template with the list/default/forced injected as
+  `<html>` data-* attrs. Config `theme.{default,forced,dir}`. See DESIGN sec 5.1.
+- Licensed MIT (`LICENSE`, copyright "RakePro" - the brand, not the `Rake-Pro`
+  GH org). All deps are permissive (MIT/BSD-3/Apache-2.0).

@@ -1,9 +1,11 @@
 /* ============================================================
    gopaste - rake brand frontend
    All color is token-driven. The base "rake" theme lives on
-   :root; alternate themes override under [data-theme="..."].
-   The markup references only tokens, so a new theme is a token
-   block - no structural changes.
+   :root; alternate themes are separate files under static/themes/
+   (arctic.css, dark.css, ...), each a [data-theme="name"] token
+   block. The server links every discovered theme file and can
+   overlay an external THEME_DIR, so a new theme is a drop-in CSS
+   file - no structural changes, no rebuild. See docs/DESIGN.md.
    ============================================================ */
 
 :root,
@@ -31,26 +33,6 @@
   --font-display:'Chakra Petch',system-ui,sans-serif;
   --font-body:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
   --font-mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
-}
-
-/* Alternate light theme - proves the token system. */
-[data-theme="arctic"] {
-  --navy-900:#dfe9f3; --navy-800:#eef4fa; --navy-700:#ffffff;
-  --steel-100:#0a1622; --steel-300:#1b4377; --steel-400:#3f7fc0;
-  --steel-500:#2f6bb0; --steel-700:#bcd6ee;
-  --green:#6f7a2a; --green-bright:#566321;
-  --ink:#16273a; --ink-dim:#46607c; --ink-faint:#7e93a9;
-  --glow:rgba(63,127,192,.25);
-  --line:rgba(31,67,119,.16);
-  --line-strong:rgba(31,67,119,.34);
-  --panel:linear-gradient(180deg,rgba(255,255,255,.92),rgba(238,244,250,.92));
-  --bg:
-    radial-gradient(1100px 640px at 50% -12%,rgba(63,127,192,.14),transparent 60%),
-    linear-gradient(180deg,#eef4fa 0%,#dfe9f3 100%);
-  --grid-ink:rgba(31,67,119,.05);
-  --code-bg:rgba(255,255,255,.6);
-  --syn-key:#2f6bb0; --syn-str:#566321; --syn-num:#1c6fb0;
-  --syn-com:#7e93a9; --syn-fn:#16273a; --syn-punc:#46607c;
 }
 
 *{box-sizing:border-box;}
@@ -154,7 +136,6 @@ body{
   display:flex;align-items:center;border-top:1px solid var(--line);
   background:rgba(6,15,24,.55);font-family:var(--font-mono);font-size:.72rem;color:var(--ink-dim);
 }
-[data-theme="arctic"] .statusbar{background:rgba(255,255,255,.6);}
 .statusbar .seg{padding:7px 14px;border-right:1px solid var(--line);display:flex;align-items:center;gap:7px;white-space:nowrap;}
 .statusbar .seg[hidden]{display:none;}
 .statusbar .seg b{color:var(--steel-300);font-weight:500;}
@@ -178,7 +159,6 @@ body{
   background:rgba(15,34,54,.96);border:1px solid var(--line-strong);color:var(--steel-100);
   box-shadow:0 8px 30px rgba(0,0,0,.5);
 }
-[data-theme="arctic"] #messages li{background:rgba(255,255,255,.97);color:#0a1622;}
 #messages li::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--steel-400);box-shadow:0 0 8px var(--steel-400);}
 #messages li.info::before{background:var(--green-bright);box-shadow:0 0 8px var(--green-bright);}
 #messages li.error{border-color:var(--danger);}

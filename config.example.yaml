@@ -20,6 +20,14 @@ keyGenerator:
   type: "random"       # random | phonetic | dictionary (random recommended)
   path: ""             # word-list path, required only for type: dictionary
 
+theme:                 # frontend theming (see docs/DESIGN.md sec 5.1)
+  default: "rake"      # THEME_DEFAULT: theme for first-time visitors.
+                       # Built-ins: rake | arctic | dark | solarized-dark | solarized-light
+  forced: ""           # THEME_FORCED: if set, locks this theme and hides the switcher
+  dir: ""              # THEME_DIR: external dir of drop-in *.css themes, each
+                       # defining a [data-theme="name"] block; served at /themes,
+                       # overlaid over the built-ins. Empty disables the overlay.
+
 rateLimits:
   totalRequests: 500   # per-client requests allowed per window; 0 disables
   every: 60000         # window length, milliseconds

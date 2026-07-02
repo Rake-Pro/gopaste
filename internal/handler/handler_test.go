@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -21,6 +22,11 @@ func newTestServer(t *testing.T) *httptest.Server {
 	cfg := config.Defaults()
 	cfg.RateLimit = config.RateLimit{} // disable limiter in tests
 	cfg.MaxLength = 1000
+	return newTestServerCfg(t, cfg)
+}
+
+func newTestServerCfg(t *testing.T, cfg config.Config) *httptest.Server {
+	t.Helper()
 
 	s, err := store.New(t.Context(), config.Storage{Type: "file", Path: filepath.Join(t.TempDir(), "data")})
 	if err != nil {
@@ -232,4 +238,92 @@ func extractKey(jsonBody string) string {
 	rest := jsonBody[i+len(marker):]
 	j := strings.IndexByte(rest, '"')
 	return rest[:j]
+}
+
+func TestThemeInjection(t *testing.T) {
+	srv := newTestServer(t)
+	_, ct, body := get(t, srv.URL+"/")
+	if !strings.Contains(ct, "text/html") {
+		t.Fatalf("index content-type = %s", ct)
+	}
+	for _, want := range []string{
+		`data-default-theme="rake"`,
+		`data-forced-theme=""`,
+		`data-themes="rake,`,
+		`/themes/arctic.css`,
+		`/themes/dark.css`,
+		`/themes/solarized-dark.css`,
+		`/themes/solarized-light.css`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("index missing %q", want)
+		}
+	}
+	// rake is the :root base and has no file link.
+	if strings.Contains(body, `/themes/rake.css`) {
+		t.Fatal("rake should not have a theme file link")
+	}
+}
+
+func TestForcedTheme(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.RateLimit = config.RateLimit{}
+	cfg.Theme.Forced = "dark"
+	cfg.Theme.Default = "arctic"
+	srv := newTestServerCfg(t, cfg)
+	_, _, body := get(t, srv.URL+"/")
+	if !strings.Contains(body, `data-forced-theme="dark"`) {
+		t.Fatal("expected data-forced-theme=dark")
+	}
+	if !strings.Contains(body, `data-theme="dark"`) {
+		t.Fatal("forced theme should be painted on <html> for first load")
+	}
+}
+
+func TestUnknownForcedThemeIgnored(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.RateLimit = config.RateLimit{}
+	cfg.Theme.Forced = "nonexistent"
+	srv := newTestServerCfg(t, cfg)
+	_, _, body := get(t, srv.URL+"/")
+	if !strings.Contains(body, `data-forced-theme=""`) {
+		t.Fatal("unknown forced theme should be dropped")
+	}
+	if !strings.Contains(body, `data-theme="rake"`) {
+		t.Fatal("should fall back to rake on first load")
+	}
+}
+
+func TestThemeOverlayServed(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "neon.css"), []byte(`[data-theme="neon"]{--bg:#000;}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Defaults()
+	cfg.RateLimit = config.RateLimit{}
+	cfg.Theme.Dir = dir
+	srv := newTestServerCfg(t, cfg)
+
+	_, _, body := get(t, srv.URL+"/")
+	if !strings.Contains(body, `/themes/neon.css`) || !strings.Contains(body, `data-themes="rake,`) {
+		t.Fatal("overlay theme not listed in index")
+	}
+	code, ct, css := get(t, srv.URL+"/themes/neon.css")
+	if code != 200 || !strings.Contains(ct, "text/css") || !strings.Contains(css, "neon") {
+		t.Fatalf("overlay css = %d %s %q", code, ct, css)
+	}
+}
+
+func TestThemeOverlayTraversalRejected(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.Defaults()
+	cfg.RateLimit = config.RateLimit{}
+	cfg.Theme.Dir = dir
+	srv := newTestServerCfg(t, cfg)
+	// A traversal attempt must not escape the overlay dir; it falls through to
+	// the SPA index fallback (200 HTML), never a filesystem file.
+	code, ct, _ := get(t, srv.URL+"/themes/..%2f..%2fetc%2fpasswd")
+	if code == 200 && strings.Contains(ct, "text/css") {
+		t.Fatal("traversal should not serve a css file")
+	}
 }

@@ -1,0 +1,19 @@
+/* solarized-dark - Ethan Schoonover's Solarized palette (dark).
+   Ships as a drop-in-format demonstration as much as a usable theme. */
+[data-theme="solarized-dark"] {
+  --navy-900:#002b36; --navy-800:#073642; --navy-700:#0a4451;
+  --steel-100:#fdf6e3; --steel-300:#93a1a1; --steel-400:#839496;
+  --steel-500:#268bd2; --steel-700:#586e75;
+  --green:#859900; --green-bright:#a5be00;
+  --ink:#839496; --ink-dim:#657b83; --ink-faint:#586e75;
+  --glow:rgba(38,139,210,.35);
+  --line:rgba(147,161,161,.14);
+  --line-strong:rgba(147,161,161,.30);
+  --panel:linear-gradient(180deg,rgba(7,54,66,.85),rgba(0,43,54,.88));
+  --bg:linear-gradient(180deg,#073642 0%,#002b36 100%);
+  --grid-ink:rgba(147,161,161,.045);
+  --code-bg:rgba(0,26,33,.35);
+  --danger:#dc322f;
+  --syn-key:#268bd2; --syn-str:#2aa198; --syn-num:#d33682;
+  --syn-com:#586e75; --syn-fn:#b58900; --syn-punc:#839496;
+}

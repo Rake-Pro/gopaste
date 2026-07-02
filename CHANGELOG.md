@@ -49,6 +49,20 @@ Versioning aims to follow [Semantic Versioning](https://semver.org/).
   keep NULL created ("unknown" in the admin console); new pastes record it.
 
 ### Added
+- Theming overhaul. Themes are now standalone CSS files (one `[data-theme]`
+  token block each) under `web/static/themes`, discovered and linked at startup.
+  - New built-in themes: generic `dark`, plus `solarized-dark` / `solarized-light`
+    (existing `rake` base + `arctic` retained). `rake` stays on `:root`.
+  - Server config (`theme.*` / `THEME_DEFAULT`, `THEME_FORCED`, `THEME_DIR`):
+    pick the default theme for new visitors, force a single theme (hides the
+    switcher, ignores stored choice), and/or overlay an external directory of
+    drop-in `*.css` themes served at `/themes/<name>.css` - no rebuild needed.
+  - The resolved theme list/default/forced are injected into `index.html`
+    (now a template) as `data-*` attributes on `<html>`; the switcher and first
+    paint read them. Theme names are bounded to `^[a-z0-9][a-z0-9_-]*$`, so the
+    `/themes` overlay handler cannot be used to traverse outside `THEME_DIR`.
+    All theme CSS is same-origin; the strict CSP (`style-src 'self'`) is intact.
+    See docs/DESIGN.md sec 5.1.
 - Optional admin console at `/admin` (disabled by default; `auth.mode`). Lists,
   searches, deletes pastes; shows count/byte stats; purges expired rows.
   - Auth: native OIDC confidential client with PKCE (S256), state + nonce, and
@@ -61,9 +75,9 @@ Versioning aims to follow [Semantic Versioning](https://semver.org/).
     `golang.org/x/crypto`. govulncheck clean.
 - Initial release of gopaste: a small, self-hosted pastebin as a single static
   Go binary with an embedded frontend and no external runtime dependencies.
-- HTTP + JSON API: `POST /documents`, `GET|HEAD /documents/:id`,
-  `GET|HEAD /raw/:id`, and a frontend SPA route. Extension-stripping on keys,
-  collision-retry on key generation.
+- HTTP + JSON API: `POST /documents` (raw body or multipart `data` field),
+  `GET|HEAD /documents/:id`, `GET|HEAD /raw/:id`, and a frontend SPA route.
+  Extension-stripping on keys, collision-retry on key generation.
 - Storage backends (all pure-Go / CGO-free, all compiled in): `postgres`
   (pgx, sliding TTL on read), `sqlite` (modernc, schema auto-created), `file`
   (one file per paste, md5-of-key filename).
@@ -90,4 +104,4 @@ Versioning aims to follow [Semantic Versioning](https://semver.org/).
 ### Notes
 - Backends are always compiled in (sqlite included) for a single build with all
   three. The public paste API is unauthenticated; the optional admin console
-  (above) gates only `/admin`. A license has not been chosen yet.
+  (above) gates only `/admin`. Licensed under MIT (`LICENSE`).

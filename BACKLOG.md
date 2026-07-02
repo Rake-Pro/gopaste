@@ -8,7 +8,6 @@ Status keys: `[ ]` todo, `[~]` in progress, `[?]` needs decision.
 - [ ] Live visual QA in a real browser (highlight.js across languages, mobile)
 - [ ] Redact DSN components from startup connect-error logs
 - [ ] Expiry countdown in status bar (needs backend to expose expiry)
-- [?] License: choose and add (deferred until the project settles)
 
 ## Admin console - follow-ups
 The console shipped (OIDC + local, hidden, server-side sessions; see CHANGELOG).

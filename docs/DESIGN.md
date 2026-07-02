@@ -50,6 +50,7 @@ the extension is stripped before lookup.
 | GET/HEAD   | `/raw/:id`        | Return the raw paste body as `text/plain`.           |
 | GET        | `/:id`            | Serve `index.html` (the frontend loads the paste).   |
 | GET        | `/`               | Serve `index.html`.                                  |
+| GET        | `/themes/:name.css` | Serve a theme's CSS: external `THEME_DIR` overlay first, then embedded `web/static/themes`. |
 | GET        | static files      | Serve `web/static/*` (css, js, fonts, images).       |
 
 `:id` is parsed as `id.split('.')[0]` - any extension (e.g. `.js`, `.md`) is
@@ -199,8 +200,41 @@ Two layers, env wins (so the deployment's injected secrets are authoritative):
 | `STORAGE_EXPIRE_DAYS`    | storage.expireDays (overrides expire) |
 | `STORAGE_FILEPATH`       | storage.path (file/sqlite) |
 | `DATABASE_URL`           | full postgres DSN (overrides parts) |
+| `THEME_DEFAULT`          | theme.default      |
+| `THEME_FORCED`           | theme.forced       |
+| `THEME_DIR`              | theme.dir (external theme overlay) |
 
 Config is read directly in-process; no credentials are written to disk.
+
+### 5.1 Theming
+
+The frontend is fully token-driven. A theme is a CSS file that defines one
+`[data-theme="<name>"]` block of custom-property tokens (and, if the palette
+inverts the chrome, a couple of component overrides - see `arctic.css`). The
+markup references only tokens, so a theme needs no structural changes.
+
+- **Base theme.** `rake` lives on `:root` in `application.css` and is always
+  available; it has no file of its own.
+- **Built-in themes.** Each alternate is a file under `web/static/themes`
+  (`arctic`, `dark`, `solarized-dark`, `solarized-light`), embedded in the
+  binary.
+- **Drop-in themes.** Set `theme.dir` (`THEME_DIR`) to an external directory of
+  `*.css` files. They are served under `/themes/<name>.css`, overlaid ahead of
+  the embedded set (an overlay file shadows a built-in of the same name), and
+  merged into the switcher - no rebuild required. Theme names are bounded to
+  `^[a-z0-9][a-z0-9_-]*$`; the `/themes` handler rejects any other basename, so
+  an overlay filename can never traverse outside `theme.dir`.
+- **Server resolution.** At startup the handler enumerates base + embedded +
+  overlay themes, then renders `index.html` (a template) with the list, the
+  configured `default`, and the `forced` theme injected as `data-*` attributes
+  on `<html>`. Configured names that don't resolve are logged and dropped
+  (`default` -> `rake`, `forced` -> unforced), so a typo never dangles.
+- **Client behaviour.** `application.js` reads those attributes: the switcher
+  cycles `data-themes` and persists the choice in `localStorage`; a first-time
+  visitor gets `default`. When `forced` is set the switcher is hidden and the
+  stored choice ignored. The server also paints the initial theme on `<html>`
+  so first render has no flash. All theme CSS is same-origin, so the strict CSP
+  (`style-src 'self'`) is unaffected.
 
 ## 6. Logging
 

@@ -19,8 +19,10 @@ for history.
 - Per-client rate limiting, security headers, paste size limits.
 - Single static binary, embedded frontend, distroless image.
 - Structured logging via zerolog.
-- Vanilla-JS frontend (no framework, no CDN); themes are CSS-token blocks with a
-  built-in switcher, so it's easy to restyle or add your own.
+- Vanilla-JS frontend (no framework, no CDN); themeable via CSS-token blocks
+  with a built-in switcher. Ships rake, arctic, dark, and Solarized (dark/light);
+  configurable default/forced theme and drop-in themes with no rebuild
+  (see [Theming](#theming)).
 
 ## Quick start
 
@@ -69,6 +71,9 @@ auth for listing and deleting pastes; setup and the config contract are in
 | `TRUSTED_PROXY_COUNT` | number of trusted reverse proxies in front (see below) |
 | `MAX_LENGTH` | max paste size in bytes (default 150 MB; `0` = unlimited) |
 | `RATE_LIMIT_MAX_BYTES` | accepted paste bytes per client per window (default 600 MB; `0` = off) |
+| `THEME_DEFAULT` | theme for first-time visitors (default `rake`) |
+| `THEME_FORCED` | lock this theme and hide the switcher (default unset) |
+| `THEME_DIR` | external directory of drop-in `*.css` themes (default unset) |
 
 ### Storage backends
 
@@ -87,6 +92,26 @@ front of the app. The client IP is then read as the Nth-from-rightmost
 ignored, so it can't be spoofed). `0` (default) trusts no `X-Forwarded-For` and
 uses the direct connection IP. Your proxies must actually forward
 `X-Forwarded-For` for this to surface real clients.
+
+## Theming
+
+The UI is fully token-driven. A theme is a single CSS file defining one
+`[data-theme="<name>"]` block of custom properties. Built-in themes: `rake`
+(default), `arctic`, `dark`, `solarized-dark`, `solarized-light`. Users switch
+via the status-bar toggle; the choice persists in `localStorage`.
+
+Operators can:
+
+- set `THEME_DEFAULT` to pick the theme new visitors see first;
+- set `THEME_FORCED` to lock a single theme and hide the switcher;
+- set `THEME_DIR` to an external directory of drop-in `*.css` themes - they are
+  served at `/themes/<name>.css`, overlaid over the built-ins, and added to the
+  switcher with no rebuild.
+
+To write a theme, copy an existing file from
+[`web/static/themes`](web/static/themes) (e.g. `dark.css`), rename it, and edit
+the token values. Theme names must match `^[a-z0-9][a-z0-9_-]*$`. See
+[`docs/DESIGN.md`](docs/DESIGN.md) sec 5.1 for the token contract.
 
 ## Build
 

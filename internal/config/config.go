@@ -6,6 +6,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 
 	"gopkg.in/yaml.v3"
@@ -32,6 +33,45 @@ type Storage struct {
 type KeyGenerator struct {
 	Type string `yaml:"type"` // random | phonetic | dictionary
 	Path string `yaml:"path"` // dictionary word list (dictionary type only)
+}
+
+// Theme configures frontend theming. A theme is a CSS file defining a
+// [data-theme="name"] token block; built-in themes ship embedded under
+// web/static/themes and operators can drop more into Dir (served at /themes,
+// overlaid over the built-ins). The base "rake" theme is always available.
+type Theme struct {
+	// Default is the theme applied to first-time visitors (no stored choice).
+	// Empty means "rake".
+	Default string `yaml:"default"`
+	// Forced, when set, locks the theme: it is always applied, the switcher is
+	// hidden, and any stored client choice is ignored.
+	Forced string `yaml:"forced"`
+	// Dir is an optional external directory of drop-in *.css themes, served
+	// under /themes and merged into the theme list. Empty disables the overlay.
+	Dir string `yaml:"dir"`
+}
+
+// themeNameRE bounds theme names to a filesystem- and markup-safe charset so
+// they can be used verbatim in /themes/<name>.css paths and [data-theme]
+// attributes without escaping or traversal risk.
+var themeNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
+
+// ValidName reports whether name is a safe theme identifier.
+func (Theme) ValidName(name string) bool { return themeNameRE.MatchString(name) }
+
+// normalize fills theme defaults and rejects unsafe names. Whether a configured
+// theme actually exists is resolved by the handler against the discovered set.
+func (t *Theme) normalize() error {
+	if t.Default == "" {
+		t.Default = "rake"
+	}
+	if !t.ValidName(t.Default) {
+		return fmt.Errorf("theme.default %q invalid (want %s)", t.Default, themeNameRE)
+	}
+	if t.Forced != "" && !t.ValidName(t.Forced) {
+		return fmt.Errorf("theme.forced %q invalid (want %s)", t.Forced, themeNameRE)
+	}
+	return nil
 }
 
 // RateLimit allows TotalRequests per Every milliseconds, per client. Zero
@@ -130,6 +170,7 @@ type Config struct {
 	RateLimit    RateLimit    `yaml:"rateLimits"`
 	Storage      Storage      `yaml:"storage"`
 	Auth         Auth         `yaml:"auth"`
+	Theme        Theme        `yaml:"theme"`
 	LogLevel     string       `yaml:"logLevel"`
 
 	// TrustedProxyCount is how many trusted reverse proxies sit in front of the
@@ -157,6 +198,7 @@ func Defaults() Config {
 		// bounding storage/bandwidth flood now that maxLength is 150 MB.
 		RateLimit:         RateLimit{TotalRequests: 500, Every: 60000, MaxBytes: 629145600},
 		Storage:           Storage{Type: "file", Path: "./data"},
+		Theme:             Theme{Default: "rake"},
 		LogLevel:          "info",
 		TrustedProxyCount: 0,
 	}
@@ -190,6 +232,9 @@ func Load(path string) (Config, error) {
 	if err := cfg.Auth.normalize(); err != nil {
 		return cfg, fmt.Errorf("auth config: %w", err)
 	}
+	if err := cfg.Theme.normalize(); err != nil {
+		return cfg, fmt.Errorf("theme config: %w", err)
+	}
 	return cfg, nil
 }
 
@@ -213,6 +258,10 @@ func applyEnv(cfg *Config) {
 	setStr(&cfg.Auth.OIDC.PostLogoutRedirectURL, "OIDC_POST_LOGOUT_REDIRECT_URL")
 	setStr(&cfg.Auth.OIDC.AdminGroup, "OIDC_ADMIN_GROUP")
 	setStr(&cfg.Auth.OIDC.GroupsClaim, "OIDC_GROUPS_CLAIM")
+
+	setStr(&cfg.Theme.Default, "THEME_DEFAULT")
+	setStr(&cfg.Theme.Forced, "THEME_FORCED")
+	setStr(&cfg.Theme.Dir, "THEME_DIR")
 
 	setStr(&cfg.Storage.Type, "STORAGE_TYPE")
 	setStr(&cfg.Storage.Host, "STORAGE_HOST")
