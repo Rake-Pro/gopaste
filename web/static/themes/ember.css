@@ -1,0 +1,22 @@
+/* ember - warm charcoal with a copper accent and olive success. Earthier and a
+   touch higher contrast than umbra; parchment-toned text over a warm near-black
+   base. A cosy dark theme with no teal and no rake-navy. */
+[data-theme="ember"] {
+  --navy-900:#14120f; --navy-800:#1d1913; --navy-700:#262019;
+  --steel-100:#f4efe6; --steel-300:#ddd6c9; --steel-400:#b0a48f;
+  --steel-500:#cf8a52; --steel-700:#3c342a;
+  --green:#8a9556; --green-bright:#a3b070;
+  --ink:#ddd6c9; --ink-dim:#a89c8c; --ink-faint:#6d655a;
+  --glow:rgba(207,138,82,.32);
+  --line:rgba(221,214,201,.10);
+  --line-strong:rgba(221,214,201,.24);
+  --panel:linear-gradient(180deg,rgba(38,32,25,.85),rgba(29,25,19,.88));
+  --bg:
+    radial-gradient(1100px 640px at 50% -12%,rgba(207,138,82,.12),transparent 60%),
+    linear-gradient(180deg,#1d1913 0%,#14120f 100%);
+  --grid-ink:rgba(221,214,201,.035);
+  --code-bg:rgba(0,0,0,.32);
+  --danger:#d2695f;
+  --syn-key:#d99a5c; --syn-str:#a3b070; --syn-num:#e0a86a;
+  --syn-com:#6d655a; --syn-fn:#ecc27a; --syn-punc:#a89c8c;
+}

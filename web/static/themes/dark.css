@@ -1,0 +1,20 @@
+/* dark - brand-neutral dark theme. Neutral slate greys with a blue accent
+   and a green success colour; no rake identity. A safe default for
+   self-hosters who do not want the rake look. */
+[data-theme="dark"] {
+  --navy-900:#0b0d10; --navy-800:#12151a; --navy-700:#1b1f26;
+  --steel-100:#f2f5f8; --steel-300:#c6ced8; --steel-400:#7f8ea3;
+  --steel-500:#4f8bd6; --steel-700:#2a3442;
+  --green:#4a9e6f; --green-bright:#63c98d;
+  --ink:#d6dce4; --ink-dim:#9aa4b2; --ink-faint:#69737f;
+  --glow:rgba(79,139,214,.35);
+  --line:rgba(200,210,220,.10);
+  --line-strong:rgba(200,210,220,.24);
+  --panel:linear-gradient(180deg,rgba(27,31,38,.85),rgba(18,21,26,.88));
+  --bg:linear-gradient(180deg,#12151a 0%,#0b0d10 100%);
+  --grid-ink:rgba(200,210,220,.035);
+  --code-bg:rgba(0,0,0,.30);
+  --danger:#d05a6a;
+  --syn-key:#7fb0e0; --syn-str:#63c98d; --syn-num:#5cb0ff;
+  --syn-com:#69737f; --syn-fn:#f2f5f8; --syn-punc:#9aa4b2;
+}

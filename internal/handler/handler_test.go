@@ -1,0 +1,456 @@
+package handler
+
+import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/rake-pro/gopaste/internal/auth"
+	"github.com/rake-pro/gopaste/internal/config"
+	"github.com/rake-pro/gopaste/internal/keygen"
+	"github.com/rake-pro/gopaste/internal/store"
+	"github.com/rake-pro/gopaste/web"
+	"golang.org/x/crypto/bcrypt"
+)
+
+func newTestServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	cfg := config.Defaults()
+	cfg.RateLimit = config.RateLimit{} // disable limiter in tests
+	cfg.MaxLength = 1000
+	return newTestServerCfg(t, cfg)
+}
+
+func newTestServerCfg(t *testing.T, cfg config.Config) *httptest.Server {
+	t.Helper()
+
+	s, err := store.New(t.Context(), config.Storage{Type: "file", Path: filepath.Join(t.TempDir(), "data")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+
+	gen, _ := keygen.New("phonetic", "")
+	staticKeys := map[string]bool{}
+	if err := s.Set(t.Context(), "about", "about content"); err == nil {
+		staticKeys["about"] = true
+	}
+
+	authMgr, err := auth.New(t.Context(), cfg.Auth) // disabled: cfg.Auth.Mode is ""
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := New(cfg, s, gen, authMgr, staticKeys, web.Static())
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func post(t *testing.T, base, body string) (int, string) {
+	t.Helper()
+	resp, err := http.Post(base+"/api/pastes", "text/plain", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, string(b)
+}
+
+func get(t *testing.T, url string) (int, string, string) {
+	t.Helper()
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, resp.Header.Get("Content-Type"), string(b)
+}
+
+func TestPostThenGetRoundTrip(t *testing.T) {
+	srv := newTestServer(t)
+
+	code, body := post(t, srv.URL, "round trip payload")
+	if code != 201 || !strings.Contains(body, `"id"`) {
+		t.Fatalf("POST = %d %s", code, body)
+	}
+	key := extractKey(body)
+
+	code, ct, got := get(t, srv.URL+"/api/pastes/"+key)
+	if code != 200 || !strings.Contains(ct, "application/json") {
+		t.Fatalf("GET paste = %d %s", code, ct)
+	}
+	if !strings.Contains(got, `"content":"round trip payload"`) || !strings.Contains(got, `"id":"`+key+`"`) {
+		t.Fatalf("GET body = %s", got)
+	}
+
+	code, ct, raw := get(t, srv.URL+"/api/pastes/"+key+"/raw")
+	if code != 200 || !strings.Contains(ct, "text/plain") || raw != "round trip payload" {
+		t.Fatalf("raw = %d %s %q", code, ct, raw)
+	}
+}
+
+func TestExtensionStripped(t *testing.T) {
+	srv := newTestServer(t)
+	_, body := post(t, srv.URL, "ext payload")
+	key := extractKey(body)
+	code, _, raw := get(t, srv.URL+"/api/pastes/"+key+".md/raw")
+	if code != 200 || raw != "ext payload" {
+		t.Fatalf("raw with ext = %d %q", code, raw)
+	}
+}
+
+func TestNotFound(t *testing.T) {
+	srv := newTestServer(t)
+	code, ct, body := get(t, srv.URL+"/api/pastes/doesnotexist")
+	if code != 404 || !strings.Contains(ct, "application/json") || !strings.Contains(body, "No paste exists for that id.") {
+		t.Fatalf("404 = %d %s %s", code, ct, body)
+	}
+}
+
+func TestMaxLength(t *testing.T) {
+	srv := newTestServer(t)
+	code, body := post(t, srv.URL, strings.Repeat("a", 1001))
+	if code != 400 || !strings.Contains(body, "Paste exceeds the maximum allowed size.") {
+		t.Fatalf("oversized = %d %s", code, body)
+	}
+}
+
+func TestCrossSiteBlocked(t *testing.T) {
+	srv := newTestServer(t)
+	mk := func(site string) int {
+		req, _ := http.NewRequest("POST", srv.URL+"/api/pastes", strings.NewReader("payload"))
+		req.Header.Set("Content-Type", "text/plain")
+		if site != "" {
+			req.Header.Set("Sec-Fetch-Site", site)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if got := mk("cross-site"); got != 403 {
+		t.Fatalf("cross-site POST = %d, want 403", got)
+	}
+	if got := mk("same-origin"); got != 201 {
+		t.Fatalf("same-origin POST = %d, want 201", got)
+	}
+	if got := mk(""); got != 201 { // curl / API client (no header)
+		t.Fatalf("no-header POST = %d, want 201", got)
+	}
+}
+
+func TestEmptyBodyRejected(t *testing.T) {
+	srv := newTestServer(t)
+	code, body := post(t, srv.URL, "   \n\t ")
+	if code != 400 || !strings.Contains(body, "must not be empty") {
+		t.Fatalf("empty body = %d %s, want 400 must not be empty", code, body)
+	}
+}
+
+func TestAboutPreloaded(t *testing.T) {
+	srv := newTestServer(t)
+	code, _, raw := get(t, srv.URL+"/api/pastes/about/raw")
+	if code != 200 || raw != "about content" {
+		t.Fatalf("about = %d %q", code, raw)
+	}
+}
+
+func TestFrontendRoutes(t *testing.T) {
+	srv := newTestServer(t)
+
+	// root -> index.html
+	if code, ct, _ := get(t, srv.URL+"/"); code != 200 || !strings.Contains(ct, "text/html") {
+		t.Fatalf("index = %d %s", code, ct)
+	}
+	// real asset
+	if code, _, _ := get(t, srv.URL+"/application.js"); code != 200 {
+		t.Fatalf("asset = %d", code)
+	}
+	// unknown single segment (paste key route) -> app shell
+	if code, ct, _ := get(t, srv.URL+"/somekey"); code != 200 || !strings.Contains(ct, "text/html") {
+		t.Fatalf("spa route = %d %s", code, ct)
+	}
+}
+
+func TestSecurityHeaders(t *testing.T) {
+	srv := newTestServer(t)
+	resp, err := http.Get(srv.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.Header.Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatal("missing X-Content-Type-Options")
+	}
+	if resp.Header.Get("X-Frame-Options") == "" {
+		t.Fatal("missing X-Frame-Options")
+	}
+}
+
+func TestChargeBytesBudget(t *testing.T) {
+	l := newRateLimiter(config.RateLimit{Every: 60000, MaxBytes: 100}, 0)
+	now := time.Unix(0, 0)
+
+	if !l.chargeBytes("ip", 60, now) {
+		t.Fatal("first 60 bytes should be allowed")
+	}
+	if !l.chargeBytes("ip", 40, now) {
+		t.Fatal("cumulative 100 bytes (== budget) should be allowed")
+	}
+	if l.chargeBytes("ip", 1, now) {
+		t.Fatal("byte over budget should be rejected")
+	}
+	// A different client has an independent budget.
+	if !l.chargeBytes("other", 100, now) {
+		t.Fatal("second client should have its own budget")
+	}
+	// Window rollover clears the budget.
+	if !l.chargeBytes("ip", 100, now.Add(61*time.Second)) {
+		t.Fatal("budget should reset in the next window")
+	}
+}
+
+func TestChargeBytesDisabled(t *testing.T) {
+	l := newRateLimiter(config.RateLimit{Every: 60000, MaxBytes: 0}, 0)
+	now := time.Unix(0, 0)
+	if !l.chargeBytes("ip", 1<<30, now) {
+		t.Fatal("byte budget of 0 must disable the limit")
+	}
+}
+
+func extractKey(jsonBody string) string {
+	const marker = `"id":"`
+	i := strings.Index(jsonBody, marker)
+	if i < 0 {
+		return ""
+	}
+	rest := jsonBody[i+len(marker):]
+	j := strings.IndexByte(rest, '"')
+	return rest[:j]
+}
+
+func TestThemeInjection(t *testing.T) {
+	srv := newTestServer(t)
+	_, ct, body := get(t, srv.URL+"/")
+	if !strings.Contains(ct, "text/html") {
+		t.Fatalf("index content-type = %s", ct)
+	}
+	for _, want := range []string{
+		`data-default-theme="rake"`,
+		`data-forced-theme=""`,
+		`data-themes="rake,`,
+		`/themes/arctic.css`,
+		`/themes/dark.css`,
+		`/themes/ember.css`,
+		`/themes/moss.css`,
+		`/themes/umbra.css`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("index missing %q", want)
+		}
+	}
+	// rake is the :root base and has no file link.
+	if strings.Contains(body, `/themes/rake.css`) {
+		t.Fatal("rake should not have a theme file link")
+	}
+}
+
+func TestForcedTheme(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.RateLimit = config.RateLimit{}
+	cfg.Theme.Forced = "dark"
+	cfg.Theme.Default = "arctic"
+	srv := newTestServerCfg(t, cfg)
+	_, _, body := get(t, srv.URL+"/")
+	if !strings.Contains(body, `data-forced-theme="dark"`) {
+		t.Fatal("expected data-forced-theme=dark")
+	}
+	if !strings.Contains(body, `data-theme="dark"`) {
+		t.Fatal("forced theme should be painted on <html> for first load")
+	}
+}
+
+func TestUnknownForcedThemeIgnored(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.RateLimit = config.RateLimit{}
+	cfg.Theme.Forced = "nonexistent"
+	srv := newTestServerCfg(t, cfg)
+	_, _, body := get(t, srv.URL+"/")
+	if !strings.Contains(body, `data-forced-theme=""`) {
+		t.Fatal("unknown forced theme should be dropped")
+	}
+	if !strings.Contains(body, `data-theme="rake"`) {
+		t.Fatal("should fall back to rake on first load")
+	}
+}
+
+func TestThemeOverlayServed(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "neon.css"), []byte(`[data-theme="neon"]{--bg:#000;}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Defaults()
+	cfg.RateLimit = config.RateLimit{}
+	cfg.Theme.Dir = dir
+	srv := newTestServerCfg(t, cfg)
+
+	_, _, body := get(t, srv.URL+"/")
+	if !strings.Contains(body, `/themes/neon.css`) || !strings.Contains(body, `data-themes="rake,`) {
+		t.Fatal("overlay theme not listed in index")
+	}
+	code, ct, css := get(t, srv.URL+"/themes/neon.css")
+	if code != 200 || !strings.Contains(ct, "text/css") || !strings.Contains(css, "neon") {
+		t.Fatalf("overlay css = %d %s %q", code, ct, css)
+	}
+}
+
+func TestThemeOverlayTraversalRejected(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.Defaults()
+	cfg.RateLimit = config.RateLimit{}
+	cfg.Theme.Dir = dir
+	srv := newTestServerCfg(t, cfg)
+	// A traversal attempt must not escape the overlay dir; it falls through to
+	// the SPA index fallback (200 HTML), never a filesystem file.
+	code, ct, _ := get(t, srv.URL+"/themes/..%2f..%2fetc%2fpasswd")
+	if code == 200 && strings.Contains(ct, "text/css") {
+		t.Fatal("traversal should not serve a css file")
+	}
+}
+
+func TestCSPDefaultSameOrigin(t *testing.T) {
+	srv := newTestServer(t)
+	resp, err := http.Get(srv.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if csp := resp.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "frame-ancestors 'self'") {
+		t.Fatalf("CSP = %q", csp)
+	}
+	if resp.Header.Get("X-Frame-Options") != "SAMEORIGIN" {
+		t.Fatal("X-Frame-Options should be SAMEORIGIN by default")
+	}
+}
+
+func TestCSPConfigurableFrameAncestors(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.RateLimit = config.RateLimit{}
+	cfg.Security.FrameAncestors = "https://wiki.example.com"
+	srv := newTestServerCfg(t, cfg)
+	resp, err := http.Get(srv.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if csp := resp.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "frame-ancestors https://wiki.example.com") {
+		t.Fatalf("CSP = %q", csp)
+	}
+	if resp.Header.Get("X-Frame-Options") != "" {
+		t.Fatal("X-Frame-Options must be omitted when framing is customized (else it overrides CSP)")
+	}
+}
+
+func TestCORSDisabledByDefault(t *testing.T) {
+	srv := newTestServer(t)
+	req, _ := http.NewRequest("GET", srv.URL+"/", nil)
+	req.Header.Set("Origin", "https://app.example.com")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.Header.Get("Access-Control-Allow-Origin") != "" {
+		t.Fatal("CORS should be disabled by default")
+	}
+}
+
+func TestCORSAllowlist(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.RateLimit = config.RateLimit{}
+	cfg.Security.CORSOrigins = []string{"https://app.example.com"}
+	srv := newTestServerCfg(t, cfg)
+
+	do := func(method, origin string) *http.Response {
+		req, _ := http.NewRequest(method, srv.URL+"/api/pastes", nil)
+		req.Header.Set("Origin", origin)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+
+	allowed := do("OPTIONS", "https://app.example.com")
+	if allowed.StatusCode != http.StatusNoContent {
+		t.Fatalf("preflight status = %d, want 204", allowed.StatusCode)
+	}
+	if allowed.Header.Get("Access-Control-Allow-Origin") != "https://app.example.com" {
+		t.Fatalf("ACAO = %q", allowed.Header.Get("Access-Control-Allow-Origin"))
+	}
+	allowed.Body.Close()
+
+	denied := do("OPTIONS", "https://evil.example.com")
+	if denied.Header.Get("Access-Control-Allow-Origin") != "" {
+		t.Fatal("disallowed origin must not get CORS headers")
+	}
+	denied.Body.Close()
+}
+
+func TestAdminLoginRateLimited(t *testing.T) {
+	hash, err := bcrypt.GenerateFromPassword([]byte("pw"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	yaml := "" +
+		"auth:\n" +
+		"  mode: local\n" +
+		"  sessionKey: \"sixteenbytekey!!\"\n" +
+		"  loginRateLimit: 2\n" +
+		"  local:\n" +
+		"    admins:\n" +
+		"      - username: admin\n" +
+		"        passwordHash: \"" + string(hash) + "\"\n"
+	path := filepath.Join(t.TempDir(), "cfg.yaml")
+	if err := os.WriteFile(path, []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.RateLimit = config.RateLimit{} // isolate the login limiter from the global one
+	srv := newTestServerCfg(t, cfg)
+
+	// The login limiter runs before credential checks, so bad creds still count.
+	post := func() int {
+		resp, err := http.PostForm(srv.URL+"/admin/login", url.Values{"username": {"admin"}, "password": {"wrong"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if c := post(); c == http.StatusTooManyRequests {
+		t.Fatalf("attempt 1 unexpectedly limited (%d)", c)
+	}
+	if c := post(); c == http.StatusTooManyRequests {
+		t.Fatalf("attempt 2 unexpectedly limited (%d)", c)
+	}
+	if c := post(); c != http.StatusTooManyRequests {
+		t.Fatalf("attempt 3 = %d, want 429", c)
+	}
+}

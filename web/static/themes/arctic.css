@@ -1,0 +1,23 @@
+/* arctic - light counterpart to the rake brand. Proves the token system:
+   a theme is a [data-theme] token block plus any component tweaks the
+   inverted palette needs (light backgrounds under hardcoded-dark chrome). */
+[data-theme="arctic"] {
+  --navy-900:#dfe9f3; --navy-800:#eef4fa; --navy-700:#ffffff;
+  --steel-100:#0a1622; --steel-300:#1b4377; --steel-400:#3f7fc0;
+  --steel-500:#2f6bb0; --steel-700:#bcd6ee;
+  --green:#6f7a2a; --green-bright:#566321;
+  --ink:#16273a; --ink-dim:#46607c; --ink-faint:#7e93a9;
+  --glow:rgba(63,127,192,.25);
+  --line:rgba(31,67,119,.16);
+  --line-strong:rgba(31,67,119,.34);
+  --panel:linear-gradient(180deg,rgba(255,255,255,.92),rgba(238,244,250,.92));
+  --bg:
+    radial-gradient(1100px 640px at 50% -12%,rgba(63,127,192,.14),transparent 60%),
+    linear-gradient(180deg,#eef4fa 0%,#dfe9f3 100%);
+  --grid-ink:rgba(31,67,119,.05);
+  --code-bg:rgba(255,255,255,.6);
+  --syn-key:#2f6bb0; --syn-str:#566321; --syn-num:#1c6fb0;
+  --syn-com:#7e93a9; --syn-fn:#16273a; --syn-punc:#46607c;
+}
+[data-theme="arctic"] .statusbar{background:rgba(255,255,255,.6);}
+[data-theme="arctic"] #messages li{background:rgba(255,255,255,.97);color:#0a1622;}

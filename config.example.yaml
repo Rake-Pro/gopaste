@@ -1,0 +1,82 @@
+# gopaste example configuration.
+# Values with an env name in the trailing comment can also be set via environment
+# variable, which takes precedence (so the deployment's injected secrets stay
+# authoritative). Values without an env name are file-only.
+
+host: "0.0.0.0"        # HOST
+port: 8080             # PORT
+logLevel: "info"       # LOG_LEVEL (debug|info|warn|error)
+
+# Number of trusted reverse proxies in front of the app. The client IP is read
+# as the Nth-from-rightmost X-Forwarded-For entry (anything further left is
+# client-controllable and ignored). 0 = trust no XFF, use the direct peer.
+trustedProxyCount: 0   # TRUSTED_PROXY_COUNT
+
+keyLength: 16          # paste keys are capability URLs; longer = less guessable
+maxLength: 157286400   # MAX_LENGTH; bytes (150 MB); 0 disables the limit
+staticMaxAge: 86400    # Cache-Control max-age for static assets, seconds
+
+keyGenerator:
+  type: "random"       # random | phonetic | dictionary (random recommended)
+  path: ""             # word-list path, required only for type: dictionary
+
+theme:                 # frontend theming (see docs/DESIGN.md sec 5.1)
+  default: "rake"      # THEME_DEFAULT: theme for first-time visitors.
+                       # Built-ins: rake | arctic | dark | solarized-dark | solarized-light
+  forced: ""           # THEME_FORCED: if set, locks this theme and hides the switcher
+  dir: ""              # THEME_DIR: external dir of drop-in *.css themes, each
+                       # defining a [data-theme="name"] block; served at /themes,
+                       # overlaid over the built-ins. Empty disables the overlay.
+
+security:              # response security headers. Defaults are strict
+                       # (same-origin, no CORS); loosen only to embed gopaste.
+  frameAncestors: "'self'"  # CSP_FRAME_ANCESTORS: CSP frame-ancestors value,
+                       # e.g. "'none'" or "https://wiki.example.com". When not
+                       # "'self'", the legacy X-Frame-Options header is dropped
+                       # so the CSP governs framing.
+  corsOrigins: []      # CORS_ORIGINS (comma-separated env): origins allowed
+                       # cross-origin API access. Empty disables CORS; "*" = any.
+
+rateLimits:
+  totalRequests: 500   # per-client requests allowed per window; 0 disables
+  every: 60000         # window length, milliseconds
+  maxBytes: 629145600  # RATE_LIMIT_MAX_BYTES; accepted paste bytes per client
+                       # per window (600 MB); flood control for large pastes; 0 disables
+
+storage:
+  type: "postgres"     # STORAGE_TYPE: postgres | sqlite | file
+
+  # --- postgres ---
+  # Either set `url` (DATABASE_URL) or the discrete parts below.
+  url: ""              # DATABASE_URL, e.g. postgres://user:pass@host:5432/db
+  host: ""             # STORAGE_HOST
+  port: 5432           # STORAGE_PORT
+  db: ""               # STORAGE_DB
+  user: ""             # STORAGE_USERNAME
+  password: ""         # STORAGE_PASSWORD
+  expire: 0            # STORAGE_EXPIRE_SECONDS; 0 = pastes never expire
+  expireDays: 0        # STORAGE_EXPIRE_DAYS; convenience, overrides expire when >0
+                       # (sliding TTL: postgres/sqlite bump expiry on read)
+
+  # --- sqlite / file ---
+  path: ""             # STORAGE_FILEPATH: sqlite db file, or file-store directory
+
+# auth:                  # admin console (disabled by default).
+#                        # Gates only /admin; the paste API stays public.
+#                        # Setup guide: docs/AUTH.md. Design: docs/DESIGN.md sec 8.
+#   mode: disabled       # AUTH_MODE: disabled | oidc | local
+#   sessionKey: ""       # AUTH_SESSION_KEY: random >=32 bytes; signs the session cookie
+#   loginRateLimit: 10   # AUTH_LOGIN_RATE_LIMIT: POST /admin/login attempts per
+#                        # IP per minute (local mode brute-force guard); default 10
+#   oidc:                # mode: oidc - native confidential client + PKCE (S256)
+#     issuer: ""         # OIDC_ISSUER: e.g. https://auth.example.com/application/o/gopaste/
+#     clientID: ""       # OIDC_CLIENT_ID
+#     clientSecret: ""   # OIDC_CLIENT_SECRET
+#     redirectURL: ""    # OIDC_REDIRECT_URL: https://<host>/admin/callback
+#     postLogoutRedirectURL: "" # OIDC_POST_LOGOUT_REDIRECT_URL: https://<host>/admin/logout
+#     adminGroup: ""     # OIDC_ADMIN_GROUP: only members of this group are admitted
+#     groupsClaim: groups # OIDC_GROUPS_CLAIM: claim carrying group names
+#   local:               # mode: local - for self-hosters without an IdP
+#     admins:
+#       - username: admin
+#         passwordHash: "" # bcrypt, e.g. htpasswd -nbB admin <pw>

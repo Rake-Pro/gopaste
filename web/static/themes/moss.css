@@ -1,0 +1,22 @@
+/* moss - deep forest-green dark with an amber accent. Green like the teal it
+   replaces is green, but a pure yellow-green rather than solarized's blue-green,
+   so it has its own identity. Pale green-grey text over a forest base. */
+[data-theme="moss"] {
+  --navy-900:#0e130d; --navy-800:#151d13; --navy-700:#1f291b;
+  --steel-100:#eef4e8; --steel-300:#cdd7c6; --steel-400:#93a488;
+  --steel-500:#c7a24e; --steel-700:#33402c;
+  --green:#7aa85f; --green-bright:#8fce7a;
+  --ink:#cdd7c6; --ink-dim:#93a488; --ink-faint:#5f6b58;
+  --glow:rgba(199,162,78,.30);
+  --line:rgba(205,215,198,.10);
+  --line-strong:rgba(205,215,198,.24);
+  --panel:linear-gradient(180deg,rgba(31,41,27,.85),rgba(21,29,19,.88));
+  --bg:
+    radial-gradient(1100px 640px at 50% -12%,rgba(199,162,78,.10),transparent 60%),
+    linear-gradient(180deg,#151d13 0%,#0e130d 100%);
+  --grid-ink:rgba(205,215,198,.035);
+  --code-bg:rgba(0,0,0,.30);
+  --danger:#d07a6a;
+  --syn-key:#8bb36a; --syn-str:#c7a24e; --syn-num:#d98f5c;
+  --syn-com:#5f6b58; --syn-fn:#dfe6cf; --syn-punc:#9aa890;
+}

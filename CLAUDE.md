@@ -1,0 +1,90 @@
+# CLAUDE.md
+
+Working memory for this repo. Read this first. Track outstanding work in
+[BACKLOG.md](BACKLOG.md), record shipped changes in [CHANGELOG.md](CHANGELOG.md),
+and see [docs/DESIGN.md](docs/DESIGN.md) for the architecture/API contract.
+
+## What this repo is
+
+`gopaste` - a small, self-hosted pastebin. It serves an HTTP + JSON API and an
+embedded brand-themed frontend as a single static Go binary. Frontend is
+vanilla JS, token-themed (rake brand), with assets embedded.
+
+## Stack
+
+- **Go 1.24+**, standard-library `net/http` with method-based routing. No framework.
+- **[zerolog](https://github.com/rs/zerolog)** for structured logging (global).
+- Storage backends (all compiled in, all pure-Go / CGO-free): `postgres`
+  ([pgx](https://github.com/jackc/pgx)), `sqlite` ([modernc](https://modernc.org/sqlite)), `file`.
+- `embed.FS` for the frontend (`web/`).
+- Container: multi-stage -> `gcr.io/distroless/static-debian12:nonroot`
+  (`CGO_ENABLED=0`, static, non-root).
+
+## Layout
+
+| Path | What it holds |
+| --- | --- |
+| `cmd/gopaste/` | `main` - config load, zerolog init, wiring, graceful shutdown |
+| `internal/config/` | YAML + `STORAGE_*`/`PORT`/`HOST` env loading |
+| `internal/store/` | `Store` interface + postgres/sqlite/file backends |
+| `internal/keygen/` | random / phonetic / dictionary key generators (crypto/rand) |
+| `internal/handler/` | routes, middleware chain, rate limit, security headers |
+| `web/` | `embed.go` + `static/` (index.html, app.css/js, fonts, highlight.js) |
+| `docs/` | DESIGN.md (architecture + API contract) |
+| `Dockerfile` | multi-stage -> distroless static |
+| `.github/workflows/build-image.yml` | GHCR image CI |
+
+## Config (env wins over the optional YAML file)
+
+`STORAGE_TYPE` (postgres|sqlite|file), `DATABASE_URL` or
+`STORAGE_{HOST,PORT,DB,USERNAME,PASSWORD}`, `STORAGE_EXPIRE_SECONDS`,
+`STORAGE_FILEPATH`, `PORT` (8080), `HOST`, `LOG_LEVEL`. See `config.example.yaml`.
+
+## Build, run, release
+
+- Local: `go run ./cmd/gopaste` (file backend in `./data` on :8080) or
+  `go build -o bin/gopaste ./cmd/gopaste`. Tests: `go test ./...`.
+- Image CI (`.github/workflows/build-image.yml`): builds **amd64**, pushes to
+  **GHCR** `ghcr.io/rake-pro/gopaste` via the built-in `GITHUB_TOKEN`. `VERSION`
+  is injected via build-arg and stamped into the binary (`main.version`).
+- **Branches:** `master` is the dev/default branch (commit here). `prod` is the
+  release branch. CI triggers: push to `prod` (-> `:latest` + `sha-`), PR ->
+  `prod` (build only, no push), and `v*` tags (-> semver).
+- **Release flow:** edit on `master` -> `go build`/`go test` to verify ->
+  commit/push `master` -> open PR `master` -> `prod` -> merge. CI pushes
+  `:latest`; the deployment pipeline rolls the new digest.
+
+## Deployment
+
+Deployment/GitOps config lives in a separate private repo. Image
+`ghcr.io/rake-pro/gopaste` is rolled by the deployment pipeline as new builds
+land.
+
+## Conventions
+
+- zerolog everywhere; no `fmt.Print`/stdlib `log` in request paths.
+- All storage backends stay CGO-free (single static binary).
+- Frontend depends only on the API contract (DESIGN sec 3); the asset bundle is
+  swappable. Every color is a `[data-theme]` token.
+- Git: do not add `Co-Authored-By` or tool/assistant attribution to commits.
+  Stage only; commit/push when explicitly asked.
+
+## Known notes
+
+- The public paste API is unauthenticated. An optional admin console at `/admin`
+  (`internal/auth`, disabled by default via `auth.mode`) adds OIDC or local auth
+  for list/delete/purge; hidden (404 to non-admins), server-side sessions. See
+  DESIGN sec 8 and docs/AUTH.md.
+- Themes are per-file: `web/static/themes/*.css` (one `[data-theme]` block each),
+  `rake` base on `:root` in application.css. `internal/handler/themes.go`
+  discovers them + an optional external `THEME_DIR` overlay (served `/themes`),
+  renders `index.html` as a template with the list/default/forced injected as
+  `<html>` data-* attrs. Config `theme.{default,forced,dir}`. See DESIGN sec 5.1.
+- Security headers are configurable via `security.*` (config): CSP
+  `frameAncestors` (`CSP_FRAME_ANCESTORS`) and CORS `corsOrigins`
+  (`CORS_ORIGINS`), both strict same-origin by default. `securityHeaders` is a
+  `*Handler` method. `POST /admin/login` has its own IP limiter
+  (`auth.loginRateLimit`, default 10/min). Postgres connect errors are scrubbed
+  of DSN secrets via `redactDSN`/`scrubDSN` in `internal/store/postgres.go`.
+- Licensed MIT (`LICENSE`, copyright "RakePro" - the brand, not the `Rake-Pro`
+  GH org). All deps are permissive (MIT/BSD-3/Apache-2.0).

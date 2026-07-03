@@ -1,0 +1,22 @@
+/* umbra - muted plum-charcoal dark. Solarized's low-contrast, easy-on-the-eyes
+   mood but warm instead of teal: a dusty amber accent over a warm near-black
+   base, with sage/violet syntax. A deliberately distinctive palette. */
+[data-theme="umbra"] {
+  --navy-900:#181419; --navy-800:#201a22; --navy-700:#2a2330;
+  --steel-100:#f2ecf0; --steel-300:#cdc0cd; --steel-400:#9b8ea0;
+  --steel-500:#c98f5c; --steel-700:#413546;
+  --green:#7f9b6b; --green-bright:#9bbd82;
+  --ink:#d2c7d0; --ink-dim:#a294a4; --ink-faint:#6f6272;
+  --glow:rgba(201,143,92,.30);
+  --line:rgba(210,199,208,.10);
+  --line-strong:rgba(210,199,208,.24);
+  --panel:linear-gradient(180deg,rgba(42,35,48,.85),rgba(32,26,34,.88));
+  --bg:
+    radial-gradient(1100px 640px at 50% -12%,rgba(201,143,92,.10),transparent 60%),
+    linear-gradient(180deg,#201a22 0%,#181419 100%);
+  --grid-ink:rgba(210,199,208,.035);
+  --code-bg:rgba(0,0,0,.30);
+  --danger:#d0687a;
+  --syn-key:#b98ac9; --syn-str:#9bbd82; --syn-num:#d99a6c;
+  --syn-com:#6f6272; --syn-fn:#e8b06a; --syn-punc:#a294a4;
+}

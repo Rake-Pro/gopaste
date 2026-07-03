@@ -1,0 +1,50 @@
+/* Styling for the pre-auth admin pages (local login form, signed-out page).
+   Served publicly so it loads without a session; kept minimal and class-only so
+   the CSP can drop style-src 'unsafe-inline'. */
+.auth-body {
+  font-family: var(--font-body, system-ui), system-ui, sans-serif;
+  background: #060f18;
+  color: #cfe0f0;
+  display: grid;
+  place-items: center;
+  height: 100vh;
+  margin: 0;
+}
+.auth-card {
+  background: #0f2236;
+  border: 1px solid rgba(127, 176, 224, .25);
+  padding: 28px 30px;
+  border-radius: 12px;
+  min-width: 300px;
+}
+.auth-title {
+  font-size: 1rem;
+  letter-spacing: .04em;
+  margin: 0 0 18px;
+  color: #eaf4ff;
+}
+.auth-err { color: #c0556a; margin: 0 0 12px; }
+.auth-input {
+  display: block;
+  width: 100%;
+  margin: 0 0 10px;
+  padding: 9px 11px;
+  background: #060f18;
+  border: 1px solid rgba(127, 176, 224, .25);
+  border-radius: 7px;
+  color: #eaf4ff;
+  box-sizing: border-box;
+}
+.auth-input.last { margin-bottom: 16px; }
+.auth-btn {
+  width: 100%;
+  padding: 9px;
+  border: 0;
+  border-radius: 7px;
+  background: linear-gradient(180deg, #bcd6ee, #3f7fc0);
+  color: #08131f;
+  font-weight: 600;
+  cursor: pointer;
+}
+.auth-msg { text-align: center; }
+.auth-link { color: #7fb0e0; }
