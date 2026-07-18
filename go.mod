@@ -3,7 +3,7 @@ module github.com/rake-pro/gopaste
 go 1.25.11
 
 require (
-	github.com/coreos/go-oidc/v3 v3.19.0
+	github.com/coreos/go-oidc/v3 v3.20.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/rs/zerolog v1.35.1
 	golang.org/x/crypto v0.53.0
