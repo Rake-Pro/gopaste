@@ -127,12 +127,21 @@ func TestMaxLength(t *testing.T) {
 }
 
 func TestCrossSiteBlocked(t *testing.T) {
-	srv := newTestServer(t)
-	mk := func(site string) int {
+	cfg := config.Defaults()
+	cfg.RateLimit = config.RateLimit{}
+	cfg.MaxLength = 1000
+	cfg.Security.CORSOrigins = []string{"https://friend.example"}
+	srv := newTestServerCfg(t, cfg)
+	sameOrigin := srv.URL // "http://127.0.0.1:port"
+
+	mk := func(site, origin string) int {
 		req, _ := http.NewRequest("POST", srv.URL+"/api/pastes", strings.NewReader("payload"))
 		req.Header.Set("Content-Type", "text/plain")
 		if site != "" {
 			req.Header.Set("Sec-Fetch-Site", site)
+		}
+		if origin != "" {
+			req.Header.Set("Origin", origin)
 		}
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -141,14 +150,26 @@ func TestCrossSiteBlocked(t *testing.T) {
 		resp.Body.Close()
 		return resp.StatusCode
 	}
-	if got := mk("cross-site"); got != 403 {
-		t.Fatalf("cross-site POST = %d, want 403", got)
+
+	cases := []struct {
+		name         string
+		site, origin string
+		want         int
+	}{
+		{"cross-site", "cross-site", "", 403},
+		{"same-origin", "same-origin", "", 201},
+		{"same-site subdomain", "same-site", "", 201},
+		{"no headers (curl)", "", "", 201},
+		{"legacy browser cross-origin", "", "https://evil.example", 403},
+		{"legacy browser same-origin", "", sameOrigin, 201},
+		{"legacy browser null origin", "", "null", 403},
+		{"cross-site but CORS-allowlisted", "cross-site", "https://friend.example", 201},
+		{"legacy browser CORS-allowlisted", "", "https://friend.example", 201},
 	}
-	if got := mk("same-origin"); got != 201 {
-		t.Fatalf("same-origin POST = %d, want 201", got)
-	}
-	if got := mk(""); got != 201 { // curl / API client (no header)
-		t.Fatalf("no-header POST = %d, want 201", got)
+	for _, tc := range cases {
+		if got := mk(tc.site, tc.origin); got != tc.want {
+			t.Errorf("%s: POST = %d, want %d", tc.name, got, tc.want)
+		}
 	}
 }
 

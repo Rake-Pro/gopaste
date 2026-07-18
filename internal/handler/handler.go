@@ -11,6 +11,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -145,10 +146,8 @@ func (h *Handler) handleRawGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handlePost(w http.ResponseWriter, r *http.Request) {
-	// CSRF: block cross-site browser-initiated writes. Modern browsers always
-	// send Sec-Fetch-Site; non-browser clients (curl, API) send nothing and are
-	// allowed, as are same-origin/same-site requests.
-	if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+	// CSRF: block cross-site browser-initiated writes.
+	if !h.writeOriginAllowed(r) {
 		writeError(w, r, http.StatusForbidden, "Cross-origin writes are not permitted.")
 		return
 	}
@@ -186,6 +185,32 @@ func (h *Handler) handlePost(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Debug().Str("key", keyHash(key)).Int("bytes", len(data)).Msg("stored paste")
 	writeJSON(w, r, http.StatusCreated, map[string]string{"id": key})
+}
+
+// writeOriginAllowed reports whether a state-changing request comes from an
+// acceptable context. Layered: modern browsers send Sec-Fetch-Site
+// (same-origin/same-site/none are trusted); when it is absent or cross-site,
+// fall back to the Origin header, which every browser attaches to cross-origin
+// POSTs - it must match the request host or the CORS allowlist. Requests with
+// neither header (curl, API clients) are allowed.
+func (h *Handler) writeOriginAllowed(r *http.Request) bool {
+	site := r.Header.Get("Sec-Fetch-Site")
+	switch site {
+	case "same-origin", "same-site", "none":
+		return true
+	}
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		// Absent on non-browser clients; allow unless Sec-Fetch-Site flagged
+		// cross-site (cross-origin browser POSTs always carry Origin).
+		return site == ""
+	}
+	// An opaque "null" origin (sandboxed iframe, file://) has no host and can
+	// only pass via the allowlist.
+	if u, err := url.Parse(origin); err == nil && u.Host != "" && u.Host == r.Host {
+		return true
+	}
+	return corsOrigin(h.cfg.Security.CORSOrigins, origin) != ""
 }
 
 // readBody extracts the paste content from either a multipart "data" field or

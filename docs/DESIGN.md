@@ -69,7 +69,7 @@ POST /api/pastes:
 - 201 `application/json`: `{"id": "<key>"}`
 - 400: `{"error": "Paste body must not be empty."}` (empty/whitespace-only body)
 - 400: `{"error": "Paste exceeds the maximum allowed size."}` (body length > maxLength)
-- 403: `{"error": "Cross-origin writes are not permitted."}` (cross-site browser write; `Sec-Fetch-Site`)
+- 403: `{"error": "Cross-origin writes are not permitted."}` (cross-site browser write; `Sec-Fetch-Site`, with `Origin` fallback checked against the request host and the `corsOrigins` allowlist)
 - 429: `{"error": "You are sending data too quickly; try again shortly."}` (request-count or byte budget exceeded)
 - 500: `{"error": "The paste could not be stored."}` (store write failure)
 

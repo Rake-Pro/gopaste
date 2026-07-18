@@ -47,6 +47,20 @@ func TestRandomReasonablyUnique(t *testing.T) {
 	}
 }
 
+func TestEntropyBits(t *testing.T) {
+	// random: 16 * log2(62) ~ 95; phonetic: 16 * ~3.4 ~ 55.
+	if bits := NewRandom("").EntropyBits(16); bits < 95 || bits > 96 {
+		t.Fatalf("random entropy = %f, want ~95.3", bits)
+	}
+	if bits := NewPhonetic().EntropyBits(16); bits < 50 || bits > 60 {
+		t.Fatalf("phonetic entropy = %f, want ~55", bits)
+	}
+	d := &Dictionary{words: make([]string, 1024)}
+	if bits := d.EntropyBits(4); bits != 40 {
+		t.Fatalf("dictionary entropy = %f, want 40 (4 * log2(1024))", bits)
+	}
+}
+
 func TestNewDefaultsToPhonetic(t *testing.T) {
 	g, err := New("", "")
 	if err != nil {

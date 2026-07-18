@@ -16,6 +16,10 @@ Remaining niceties:
 - [ ] List pagination beyond `DefaultListLimit` (500) for very large stores.
 
 ## Future / maybe
+- [?] Encrypted / protected sharing: protected links/text, e.g. password-gated
+  pastes and/or client-side end-to-end encryption (server never sees
+  plaintext). Approach deliberately undecided - gather requirements before
+  design.
 - [ ] Optional backends: s3, redis (behind the same interface)
 - [ ] Prometheus /metrics endpoint
 - [ ] Paste size + count metrics, structured access logs to a sink

@@ -33,6 +33,14 @@ Versioning aims to follow [Semantic Versioning](https://semver.org/).
   console); new pastes record it.
 
 ### Security
+- Paste-creation CSRF check is now layered: alongside the existing
+  `Sec-Fetch-Site` check, requests without that header fall back to `Origin`
+  validation (must match the request host or the `corsOrigins` allowlist);
+  cross-site requests from an allowlisted CORS origin are now permitted, and an
+  opaque `null` origin only passes via the allowlist.
+- Startup warning when the configured key generator and `keyLength` yield an
+  estimated key entropy below 40 bits (enumerable-key guard for the
+  phonetic/dictionary generators); `keygen.Generator` gained `EntropyBits`.
 - Postgres DSN secrets kept out of logs: connect/ping error paths now redact the
   password and strip any verbatim DSN that a pgx parse error might echo
   (`redactDSN`/`scrubDSN`).

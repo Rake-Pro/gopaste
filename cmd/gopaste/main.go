@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -49,6 +50,14 @@ func run(cfg config.Config) error {
 	gen, err := keygen.New(cfg.KeyGenerator.Type, cfg.KeyGenerator.Path)
 	if err != nil {
 		return err
+	}
+	// Keys are unauthenticated capability URLs; below ~40 bits they become
+	// enumerable even with rate limiting slowing the scan.
+	const minKeyEntropyBits = 40
+	if bits := gen.EntropyBits(cfg.KeyLength); bits < minKeyEntropyBits {
+		log.Warn().Float64("entropyBits", math.Round(bits)).Int("keyLength", cfg.KeyLength).
+			Str("generator", cfg.KeyGenerator.Type).
+			Msg("paste keys are low-entropy and may be enumerable; raise keyLength or use the random generator")
 	}
 
 	log.Info().Str("version", version).Msg("gopaste starting")

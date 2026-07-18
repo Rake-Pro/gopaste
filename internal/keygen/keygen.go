@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"crypto/rand"
 	"fmt"
+	"math"
 	"math/big"
 	"os"
 	"strings"
@@ -15,6 +16,9 @@ import (
 // Generator creates a paste key of the requested length.
 type Generator interface {
 	CreateKey(length int) string
+	// EntropyBits estimates the entropy in bits of a key of the requested
+	// length, so callers can warn when a configuration yields guessable keys.
+	EntropyBits(length int) float64
 }
 
 // randInt returns a uniformly random int in [0, n) using crypto/rand.
@@ -53,6 +57,10 @@ func (g *Random) CreateKey(length int) string {
 	return b.String()
 }
 
+func (g *Random) EntropyBits(length int) float64 {
+	return float64(length) * math.Log2(float64(len(g.keyspace)))
+}
+
 // Phonetic builds pronounceable keys by assembling randomly chosen syllable
 // templates. Each template is a short pattern of consonant ('c') and vowel ('v')
 // slots; syllables are concatenated until the requested length is reached.
@@ -84,6 +92,25 @@ func (g *Phonetic) CreateKey(length int) string {
 		}
 	}
 	return b.String()[:length]
+}
+
+// EntropyBits approximates per-character entropy as the average over all
+// syllable-template slots (consonant vs vowel choice); template boundaries are
+// not observable in the flattened key, so this is a close estimate.
+func (g *Phonetic) EntropyBits(length int) float64 {
+	var slots int
+	var bits float64
+	for _, t := range syllableTemplates {
+		for i := 0; i < len(t); i++ {
+			if t[i] == 'c' {
+				bits += math.Log2(float64(len(consonants)))
+			} else {
+				bits += math.Log2(float64(len(vowels)))
+			}
+		}
+		slots += len(t)
+	}
+	return float64(length) * bits / float64(slots)
 }
 
 // Dictionary concatenates `length` words drawn from a word list.
@@ -124,6 +151,10 @@ func (g *Dictionary) CreateKey(length int) string {
 		b.WriteString(g.words[randInt(len(g.words))])
 	}
 	return b.String()
+}
+
+func (g *Dictionary) EntropyBits(length int) float64 {
+	return float64(length) * math.Log2(float64(len(g.words)))
 }
 
 // New builds a generator from a type name. Recognized: "random", "phonetic",
