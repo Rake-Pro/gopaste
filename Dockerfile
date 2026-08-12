@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
       -o /out/gopaste ./cmd/gopaste
 
 # ---- runtime ----
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian13:nonroot
 COPY --from=build /out/gopaste /usr/local/bin/gopaste
 EXPOSE 8080
 USER nonroot:nonroot
