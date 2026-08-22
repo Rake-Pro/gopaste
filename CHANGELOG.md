@@ -7,6 +7,8 @@ Versioning aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Go toolchain 1.27rc2 -> 1.27.0
+
 ### Changed
 - **BREAKING:** Public paste API redesigned under `/api/pastes`: `POST
   /api/pastes` (returns `201 {"id":"<key>"}`), `GET /api/pastes/{id}` (returns
