@@ -10,6 +10,7 @@ Versioning aims to follow [Semantic Versioning](https://semver.org/).
 - Go toolchain 1.27rc2 -> 1.27.0
 
 ### Changed
+- CI: release flow renamed from `main -> prod` to `dev -> main`. `dev` is the default working branch, `main` the protected release branch; the bot PR is now "Merge dev to main". Mechanics unchanged. Pushes to `dev` now also publish `:dev` and `:dev-<sha>` images.
 - **BREAKING:** Public paste API redesigned under `/api/pastes`: `POST
   /api/pastes` (returns `201 {"id":"<key>"}`), `GET /api/pastes/{id}` (returns
   `{"id":"<key>","content":"<text>"}`), and `GET /api/pastes/{id}/raw` for the
