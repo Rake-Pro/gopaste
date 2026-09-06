@@ -47,12 +47,15 @@ vanilla JS, token-themed (rake brand), with assets embedded.
 - Image CI (`.github/workflows/build-image.yml`): builds **amd64**, pushes to
   **GHCR** `ghcr.io/rake-pro/gopaste` via the built-in `GITHUB_TOKEN`. `VERSION`
   is injected via build-arg and stamped into the binary (`main.version`).
-- **Branches:** `master` is the dev/default branch (commit here). `prod` is the
-  release branch. CI triggers: push to `prod` (-> `:latest` + `sha-`), PR ->
-  `prod` (build only, no push), and `v*` tags (-> semver).
-- **Release flow:** edit on `master` -> `go build`/`go test` to verify ->
-  commit/push `master` -> open PR `master` -> `prod` -> merge. CI pushes
-  `:latest`; the deployment pipeline rolls the new digest.
+- **Branches:** `dev` is the working/default branch (commit here). `main` is the
+  protected release branch. CI triggers: push to `dev` (`ci.yml`: build + push
+  `:dev` and `:dev-<sha>`), PR -> `dev` (build only, no push), merge into
+  `main` (`release.yml`: mints the next semver tag, pushes `X.Y.Z` + `:latest`
+  + `sha-`), and manual `v*` tags.
+- **Release flow:** edit on `dev` -> `go build`/`go test` to verify ->
+  commit/push `dev` -> `sync-main.yml` opens the "Merge dev to main" PR ->
+  merge it (merge commit). CI pushes `:latest`; the deployment pipeline rolls
+  the new digest.
 
 ## Deployment
 
