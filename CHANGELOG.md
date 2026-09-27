@@ -58,7 +58,7 @@ Versioning aims to follow [Semantic Versioning](https://semver.org/).
     the spoofable leftmost entry, which let an attacker mint a fresh rate-limit
     bucket per request.
   - Default key generator switched to `random`, default `keyLength` 10 -> 16
-    (~95 bits) - paste keys are capability URLs, so unguessability matters.
+    (~95 bits): paste keys are capability URLs, so unguessability matters.
   - Paste keys kept out of logs: request logger logs the matched route pattern
     (not the resolved path); error/debug logs hash the key.
   - Content-Security-Policy added (script-src 'self', object-src 'none',
@@ -96,7 +96,7 @@ Versioning aims to follow [Semantic Versioning](https://semver.org/).
   - Server config (`theme.*` / `THEME_DEFAULT`, `THEME_FORCED`, `THEME_DIR`):
     pick the default theme for new visitors, force a single theme (hides the
     switcher, ignores stored choice), and/or overlay an external directory of
-    drop-in `*.css` themes served at `/themes/<name>.css` - no rebuild needed.
+    drop-in `*.css` themes served at `/themes/<name>.css`, no rebuild needed.
   - The resolved theme list/default/forced are injected into `index.html`
     (now a template) as `data-*` attributes on `<html>`; the switcher and first
     paint read them. Theme names are bounded to `^[a-z0-9][a-z0-9_-]*$`, so the

@@ -1,6 +1,6 @@
-# gopaste - Design Document
+# gopaste: Design Document
 
-Status: Live - paste.example.com (public)
+Status: Live at paste.example.com (public)
 Module: `github.com/rake-pro/gopaste`
 Binary: `gopaste`
 
@@ -25,7 +25,7 @@ Non-goals:
 - Storage backends beyond postgres/sqlite/file. The storage interface leaves
   room to add more later.
 - End-user authentication / multi-user paste ownership. The public paste API is
-  unauthenticated. (The admin-only console - section 8 - is separate; it gates
+  unauthenticated. (The admin-only console, section 8, is separate; it gates
   only `/admin`, not the paste API.)
 - A finalized frontend. The shipped brand-themed UI is stable, but the backend
   depends only on the API contract (section 3), not on any specific markup, so
@@ -52,7 +52,7 @@ the extension is stripped before lookup.
 | GET        | `/themes/:name.css`    | Serve a theme's CSS: external `THEME_DIR` overlay first, then embedded `web/static/themes`. |
 | GET        | static files           | Serve `web/static/*` (css, js, fonts, images).       |
 
-`{id}` is parsed as `id.split('.')[0]` - any display extension (e.g. `.js`,
+`{id}` is parsed as `id.split('.')[0]`: any display extension (e.g. `.js`,
 `.md`) is stripped before lookup so syntax-highlight URLs resolve to the base
 key.
 
@@ -195,7 +195,7 @@ create table pastes (
 );
 ```
 
-Driver: `modernc.org/sqlite` - a pure-Go (CGO-free) SQLite, so the static
+Driver: `modernc.org/sqlite`, a pure-Go (CGO-free) SQLite, so the static
 binary and distroless image hold. The app creates the table on first run.
 
 ### 4.4 File backend
@@ -241,7 +241,7 @@ Config is read directly in-process; no credentials are written to disk.
 
 The frontend is fully token-driven. A theme is a CSS file that defines one
 `[data-theme="<name>"]` block of custom-property tokens (and, if the palette
-inverts the chrome, a couple of component overrides - see `arctic.css`). The
+inverts the chrome, a couple of component overrides, see `arctic.css`). The
 markup references only tokens, so a theme needs no structural changes.
 
 - **Base theme.** `rake` lives on `:root` in `application.css` and is always
@@ -252,7 +252,7 @@ markup references only tokens, so a theme needs no structural changes.
 - **Drop-in themes.** Set `theme.dir` (`THEME_DIR`) to an external directory of
   `*.css` files. They are served under `/themes/<name>.css`, overlaid ahead of
   the embedded set (an overlay file shadows a built-in of the same name), and
-  merged into the switcher - no rebuild required. Theme names are bounded to
+  merged into the switcher, no rebuild required. Theme names are bounded to
   `^[a-z0-9][a-z0-9_-]*$`; the `/themes` handler rejects any other basename, so
   an overlay filename can never traverse outside `theme.dir`.
 - **Server resolution.** At startup the handler enumerates base + embedded +
@@ -321,7 +321,7 @@ default (`auth.mode`). Implemented in `internal/auth`; setup in `docs/AUTH.md`.
 
 Auth strategy (native OIDC + local fallback):
 
-- `oidc` (primary): gopaste is itself the OIDC client - it runs the auth-code
+- `oidc` (primary): gopaste is itself the OIDC client. It runs the auth-code
   flow against the IdP (discovery via the issuer) as a confidential client with
   PKCE (S256), validates the ID token (state + nonce), reads the groups claim,
   and admits only members of the configured admin group.

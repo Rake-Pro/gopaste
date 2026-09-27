@@ -3,8 +3,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A small, dependency-light pastebin written in Go. It serves a single static
-binary - HTTP API, pluggable storage, and an embedded themeable frontend -
-with no external runtime dependencies.
+binary (HTTP API, pluggable storage, and an embedded themeable frontend) with
+no external runtime dependencies.
 
 gopaste takes cues from minimalist paste tools like hastebin, but is an
 original, ground-up design: its own API, storage engine, key generation, and UI.
@@ -111,7 +111,7 @@ Operators can:
 
 - set `THEME_DEFAULT` to pick the theme new visitors see first;
 - set `THEME_FORCED` to lock a single theme and hide the switcher;
-- set `THEME_DIR` to an external directory of drop-in `*.css` themes - they are
+- set `THEME_DIR` to an external directory of drop-in `*.css` themes: they are
   served at `/themes/<name>.css`, overlaid over the built-ins, and added to the
   switcher with no rebuild.
 
@@ -141,4 +141,4 @@ GOPASTE_TEST_PG='postgres://user:pass@localhost:5432/gopaste_test' go test ./int
 
 ## License
 
-MIT - see [`LICENSE`](LICENSE).
+MIT. See [`LICENSE`](LICENSE).

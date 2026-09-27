@@ -1,4 +1,4 @@
-# gopaste - Admin console authentication
+# gopaste: Admin console authentication
 
 > Setup and the config/env contract for the admin console. The public paste API
 > is unauthenticated and always will be; auth gates only `/admin`. Design:
@@ -77,7 +77,7 @@ htpasswd -nbB admin 'your-password'           # -> admin:$2y$12$...  (use the ha
    and post-logout `https://<your-host>/admin/logout`.
 3. Make sure the IdP emits a **groups claim** (often needs a `groups` scope or a
    property mapping). Decide which group means "gopaste admin".
-4. Enable PKCE (S256) on the client if your IdP makes it optional - gopaste
+4. Enable PKCE (S256) on the client if your IdP makes it optional: gopaste
    always sends a PKCE challenge.
 5. Configure gopaste (`auth.mode: oidc` + the `oidc` block / env above) with the
    issuer, client ID/secret, redirect URL, admin group, and a session key.
@@ -88,7 +88,7 @@ gopaste discovers the authorization/token/JWKS endpoints from
 ### Authentik example
 
 - Provider: **OAuth2/OpenID**, confidential client, RS256 **Signing Key** (so the
-  ID token is JWKS-verifiable). *Leave the **Encryption Key** unset* - gopaste
+  ID token is JWKS-verifiable). *Leave the **Encryption Key** unset*: gopaste
   (via go-oidc) accepts only signed (JWS) ID tokens, not encrypted (JWE) ones;
   setting it yields `malformed jwt: ... must have three parts` at callback.
 - Application slug `gopaste` -> issuer `https://<authentik-host>/application/o/gopaste/`
@@ -104,4 +104,5 @@ gopaste discovers the authorization/token/JWKS endpoints from
 - Confidential client + PKCE (S256); ID token validated with state + nonce.
 - Session cookie is signed, `Secure`, `HttpOnly`, `SameSite`; bounded TTL.
 - `redirectURL` is fixed (allowlisted) to prevent open-redirect on callback.
-- Admin actions (e.g. deletes) are audit-logged.
+- Admin actions (e.g. deletes, purges) are logged via zerolog with the paste
+  key hashed; a dedicated audit sink is not yet implemented (see BACKLOG.md).

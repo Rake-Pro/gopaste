@@ -1,4 +1,4 @@
-# gopaste - Backlog
+# gopaste: Backlog
 
 Outstanding and future work. Shipped work is recorded in CHANGELOG.md.
 Status keys: `[ ]` todo, `[~]` in progress, `[?]` needs decision.
@@ -8,7 +8,7 @@ Status keys: `[ ]` todo, `[~]` in progress, `[?]` needs decision.
 - [ ] Live visual QA in a real browser (highlight.js across languages, mobile)
 - [ ] Expiry countdown in status bar (needs backend to expose expiry)
 
-## Admin console - follow-ups
+## Admin console follow-ups
 The console shipped (OIDC + local, hidden, server-side sessions; see CHANGELOG).
 Remaining niceties:
 - [ ] Audit-log admin actions to a sink, not just zerolog (deletes/purges).
@@ -18,7 +18,7 @@ Remaining niceties:
 ## Future / maybe
 - [?] Encrypted / protected sharing: protected links/text, e.g. password-gated
   pastes and/or client-side end-to-end encryption (server never sees
-  plaintext). Approach deliberately undecided - gather requirements before
+  plaintext). Approach deliberately undecided: gather requirements before
   design.
 - [ ] Optional backends: s3, redis (behind the same interface)
 - [ ] Prometheus /metrics endpoint
