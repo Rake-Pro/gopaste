@@ -6,7 +6,7 @@ and see [docs/DESIGN.md](docs/DESIGN.md) for the architecture/API contract.
 
 ## What this repo is
 
-`gopaste` - a small, self-hosted pastebin. It serves an HTTP + JSON API and an
+`gopaste`: a small, self-hosted pastebin. It serves an HTTP + JSON API and an
 embedded brand-themed frontend as a single static Go binary. Frontend is
 vanilla JS, token-themed (rake brand), with assets embedded.
 
@@ -24,7 +24,7 @@ vanilla JS, token-themed (rake brand), with assets embedded.
 
 | Path | What it holds |
 | --- | --- |
-| `cmd/gopaste/` | `main` - config load, zerolog init, wiring, graceful shutdown |
+| `cmd/gopaste/` | `main`: config load, zerolog init, wiring, graceful shutdown |
 | `internal/config/` | YAML + `STORAGE_*`/`PORT`/`HOST` env loading |
 | `internal/store/` | `Store` interface + postgres/sqlite/file backends |
 | `internal/keygen/` | random / phonetic / dictionary key generators (crypto/rand) |
@@ -89,5 +89,5 @@ land.
   `*Handler` method. `POST /admin/login` has its own IP limiter
   (`auth.loginRateLimit`, default 10/min). Postgres connect errors are scrubbed
   of DSN secrets via `redactDSN`/`scrubDSN` in `internal/store/postgres.go`.
-- Licensed MIT (`LICENSE`, copyright "RakePro" - the brand, not the `Rake-Pro`
+- Licensed MIT (`LICENSE`, copyright "RakePro", the brand, not the `Rake-Pro`
   GH org). All deps are permissive (MIT/BSD-3/Apache-2.0).
