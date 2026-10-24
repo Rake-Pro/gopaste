@@ -12,7 +12,7 @@ vanilla JS, token-themed (rake brand), with assets embedded.
 
 ## Stack
 
-- **Go 1.24+**, standard-library `net/http` with method-based routing. No framework.
+- **Go 1.27+**, standard-library `net/http` with method-based routing. No framework.
 - **[zerolog](https://github.com/rs/zerolog)** for structured logging (global).
 - Storage backends (all compiled in, all pure-Go / CGO-free): `postgres`
   ([pgx](https://github.com/jackc/pgx)), `sqlite` ([modernc](https://modernc.org/sqlite)), `file`.
