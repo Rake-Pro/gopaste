@@ -2,11 +2,15 @@ module github.com/rake-pro/gopaste
 
 go 1.27.3
 
+// No Multipath TCP listeners: nothing on the fleet dials MPTCP, and a listening
+// MPTCP socket was the precondition of the CVE-2026-98432 host-kernel exploit.
+godebug multipathtcp=0
+
 require (
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/rs/zerolog v1.35.1
-	go.yaml.in/yaml/v3 v3.0.5
+	go.yaml.in/yaml/v3 v3.0.6
 	golang.org/x/crypto v0.58.0
 	golang.org/x/oauth2 v0.37.0
 	modernc.org/sqlite v1.61.0
