@@ -37,11 +37,15 @@ func (p *localProvider) submit(m *Manager, w http.ResponseWriter, r *http.Reques
 		// Compare against a dummy hash so a missing user and a wrong password
 		// take similar time (reduce username enumeration via timing).
 		_ = bcrypt.CompareHashAndPassword(p.dummyHash, []byte(pass))
-		p.fail(w, r, user)
+		// Do not log the submitted name: it may be a password typed into the
+		// username field.
+		log.Warn().Msg("admin login rejected (local): unknown user")
+		p.fail(w, r)
 		return
 	}
 	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(pass)) != nil {
-		p.fail(w, r, user)
+		log.Warn().Str("user", user).Msg("admin login rejected (local): wrong password")
+		p.fail(w, r)
 		return
 	}
 
@@ -50,8 +54,7 @@ func (p *localProvider) submit(m *Manager, w http.ResponseWriter, r *http.Reques
 	http.Redirect(w, r, "/admin", http.StatusFound)
 }
 
-func (p *localProvider) fail(w http.ResponseWriter, r *http.Request, user string) {
-	log.Warn().Str("user", user).Msg("admin login rejected (local)")
+func (p *localProvider) fail(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusUnauthorized)
 	p.loginForm(w, r, "Invalid credentials.")
 }

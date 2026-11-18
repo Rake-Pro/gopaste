@@ -112,6 +112,7 @@ API consumers.
 | host               | 0.0.0.0   | overridable by `HOST`                       |
 | keyLength          | 16        | ~95 bits of key entropy                     |
 | maxLength          | 157286400 | bytes (150 MB); `MAX_LENGTH`; 0 disables    |
+| maxStoredBytes     | 0         | total live paste bytes; `MAX_STORED_BYTES`; new pastes get 507 once reached; 0 disables |
 | staticMaxAge       | 86400     | seconds, Cache-Control max-age for static   |
 | keyGenerator       | random    |                                             |
 | rateLimits         | 500/60s   | total requests per client per window        |
@@ -217,6 +218,7 @@ Two layers, env wins (so the deployment's injected secrets are authoritative):
 | `LOG_LEVEL`              | log level          |
 | `TRUSTED_PROXY_COUNT`    | trustedProxyCount  |
 | `MAX_LENGTH`             | maxLength          |
+| `MAX_STORED_BYTES`       | maxStoredBytes     |
 | `RATE_LIMIT_MAX_BYTES`   | rateLimits.maxBytes |
 | `STORAGE_TYPE`           | storage.type       |
 | `STORAGE_HOST`           | storage.host       |
@@ -340,7 +342,8 @@ Sessions and routing:
 - Routes: `/admin` (console), `/admin/login`, `/admin/callback`,
   `/admin/logout` (RP-initiated logout in OIDC mode), `/admin/api/*`.
 - Hidden: the UI returns 404 to anonymous/non-admin (the API returns 401 so the
-  console JS can redirect to login), so the console's existence isn't disclosed.
+  console JS can redirect to login). `/admin/login` stays reachable (OIDC mode
+  redirects to the IdP), so this hides the UI but not the console's existence.
 
 The handler middleware chain and the `Store` interface (extended with
 `List`/`Delete`/`Stats`/`PurgeExpired`) were the reserved seams this slots into.

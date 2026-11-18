@@ -36,6 +36,25 @@ Versioning aims to follow [Semantic Versioning](https://semver.org/).
   console); new pastes record it.
 
 ### Security
+- `GET /api/pastes/{id}` streams the JSON response in chunks instead of
+  building it in memory (escaping can grow content 6x); output bytes unchanged.
+- The per-client byte budget is checked before and while reading an upload
+  (Content-Length pre-check, read bounded to the remaining budget), so an
+  over-budget client no longer forces a full-size read before its 429.
+- Rate limiter keys IPv6 clients by /64, and its expired-entry sweep runs at
+  most once per window instead of on every new client.
+- Optional `maxStoredBytes` / `MAX_STORED_BYTES` cap on total live paste bytes
+  (new pastes get 507 once reached). Default 0 = no cap, as before.
+- State-changing admin routes (`DELETE /admin/api/pastes/{key}`,
+  `POST /admin/api/purge`, `POST /admin/logout`, `POST /admin/login`) require
+  `Sec-Fetch-Site: same-origin` (or a same-host `Origin` when that header is
+  absent). `GET /admin/logout` from another site no longer ends a live session;
+  it shows a confirm button instead.
+- `X-Forwarded-For` header lines are joined before picking the trusted entry.
+- Failed local logins no longer log an unknown submitted username.
+- `maxLength: 0` now really disables the limit for raw bodies (was 1 byte).
+- Key selection gives up after 100 collisions instead of looping forever.
+- GitHub Actions pinned to commit SHAs.
 - Paste-creation CSRF check is now layered: alongside the existing
   `Sec-Fetch-Site` check, requests without that header fall back to `Origin`
   validation (must match the request host or the `corsOrigins` allowlist);

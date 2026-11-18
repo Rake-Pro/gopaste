@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"net/url"
 	"path"
 	"time"
 
@@ -36,15 +37,57 @@ func (h *Handler) registerAdmin(mux *http.ServeMux) {
 
 	mux.HandleFunc("GET /admin/login", m.Login)
 	mux.HandleFunc("GET /admin/callback", m.Callback)
-	mux.HandleFunc("GET /admin/logout", m.Logout)
-	mux.HandleFunc("POST /admin/logout", m.Logout)
+	mux.HandleFunc("GET /admin/logout", h.logoutGET)
+	mux.HandleFunc("POST /admin/logout", sameOriginOnly(m.Logout))
 	if m.LocalMode() {
-		mux.HandleFunc("POST /admin/login", h.loginRateLimit(m.LoginSubmit))
+		mux.HandleFunc("POST /admin/login", sameOriginOnly(h.loginRateLimit(m.LoginSubmit)))
 	}
 
 	mux.HandleFunc("GET /admin/api/pastes", m.GateAPI(h.adminListPastes))
-	mux.HandleFunc("DELETE /admin/api/pastes/{key}", m.GateAPI(h.adminDeletePaste))
-	mux.HandleFunc("POST /admin/api/purge", m.GateAPI(h.adminPurge))
+	mux.HandleFunc("DELETE /admin/api/pastes/{key}", sameOriginOnly(m.GateAPI(h.adminDeletePaste)))
+	mux.HandleFunc("POST /admin/api/purge", sameOriginOnly(m.GateAPI(h.adminPurge)))
+}
+
+// sameOriginOnly guards state-changing admin routes. Stricter than
+// writeOriginAllowed: "same-site" is refused too, since the SameSite=Lax session
+// cookie rides along on requests from sibling subdomains. Requests with neither
+// Sec-Fetch-Site nor Origin (curl, scripts) are allowed.
+func sameOriginOnly(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ok := false
+		switch site := r.Header.Get("Sec-Fetch-Site"); site {
+		case "same-origin", "none":
+			ok = true
+		case "":
+			origin := r.Header.Get("Origin")
+			u, err := url.Parse(origin)
+			ok = origin == "" || (err == nil && u.Host != "" && u.Host == r.Host)
+		}
+		if !ok {
+			writeError(w, r, http.StatusForbidden, "Cross-origin requests are not permitted.")
+			return
+		}
+		next(w, r)
+	}
+}
+
+// logoutGET keeps GET /admin/logout working for the console link and the IdP
+// post-logout redirect (which arrives with no live session), but does not sign
+// a live session out on a navigation from another site: it shows a confirm
+// button that POSTs instead.
+func (h *Handler) logoutGET(w http.ResponseWriter, r *http.Request) {
+	if site := r.Header.Get("Sec-Fetch-Site"); site == "cross-site" || site == "same-site" {
+		if _, ok := h.auth.Identity(r); ok {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(`<!doctype html><html><head><meta charset="utf-8"><title>sign out</title>` +
+				`<meta name="robots" content="noindex,nofollow"><link rel="stylesheet" href="/auth.css"></head>` +
+				`<body class="auth-body"><form class="auth-card" method="post" action="/admin/logout">` +
+				`<p>Sign out of the gopaste admin console?</p>` +
+				`<button class="auth-btn" type="submit">Sign out</button></form></body></html>`))
+			return
+		}
+	}
+	h.auth.Logout(w, r)
 }
 
 func (h *Handler) adminIndex(w http.ResponseWriter, r *http.Request) {
