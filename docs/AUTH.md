@@ -8,8 +8,10 @@
 
 The admin console lives under `/admin` (UI + `/admin/api/*`). It is **admin-only
 and hidden**: there is no admin entry point in the public UI, and `/admin`
-returns 404 to anonymous or non-admin requests so its existence is not
-disclosed. Auth is **disabled by default**; enable it with `auth.mode`.
+returns 404 to anonymous or non-admin requests. This is obscurity, not a
+security boundary: `/admin/login` must stay reachable so admins can sign in (in
+`oidc` mode it redirects to the IdP), and `/admin/api/*` answers 401, so a
+prober can tell the console is enabled. Auth is **disabled by default**; enable it with `auth.mode`.
 
 ### Routes
 
@@ -100,9 +102,14 @@ gopaste discovers the authorization/token/JWKS endpoints from
 
 ## Security notes
 
-- Console is hidden: `/admin` returns 404 to non-admins; no public link to it.
+- Console UI is not linked and `/admin` returns 404 to non-admins; the login
+  and API routes still reveal that the console is enabled (see above).
 - Confidential client + PKCE (S256); ID token validated with state + nonce.
 - Session cookie is signed, `Secure`, `HttpOnly`, `SameSite`; bounded TTL.
+- State-changing admin requests (DELETE/POST) must be `Sec-Fetch-Site:
+  same-origin` (or carry a same-host `Origin`); `same-site` is refused because
+  the `SameSite=Lax` cookie is sent from sibling subdomains. A `GET
+  /admin/logout` arriving from another site asks for confirmation (POST).
 - `redirectURL` is fixed (allowlisted) to prevent open-redirect on callback.
 - Admin actions (e.g. deletes, purges) are logged via zerolog with the paste
   key hashed; a dedicated audit sink is not yet implemented (see BACKLOG.md).

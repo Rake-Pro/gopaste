@@ -197,6 +197,10 @@ type Config struct {
 	// (anything further left is client-controllable and ignored). 0 = trust no
 	// XFF, use the direct peer (RemoteAddr).
 	TrustedProxyCount int `yaml:"trustedProxyCount"`
+
+	// MaxStoredBytes caps the total size of live pastes; new pastes are refused
+	// once it is reached. 0 (default) = no cap.
+	MaxStoredBytes int `yaml:"maxStoredBytes"`
 }
 
 // Defaults returns the built-in configuration defaults.
@@ -266,6 +270,7 @@ func applyEnv(cfg *Config) {
 	setStr(&cfg.LogLevel, "LOG_LEVEL")
 	setInt(&cfg.TrustedProxyCount, "TRUSTED_PROXY_COUNT")
 	setInt(&cfg.MaxLength, "MAX_LENGTH")
+	setInt(&cfg.MaxStoredBytes, "MAX_STORED_BYTES")
 	setInt(&cfg.RateLimit.MaxBytes, "RATE_LIMIT_MAX_BYTES")
 
 	setStr(&cfg.Auth.Mode, "AUTH_MODE")

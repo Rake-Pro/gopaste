@@ -14,6 +14,9 @@ trustedProxyCount: 0   # TRUSTED_PROXY_COUNT
 
 keyLength: 16          # paste keys are capability URLs; longer = less guessable
 maxLength: 157286400   # MAX_LENGTH; bytes (150 MB); 0 disables the limit
+maxStoredBytes: 0      # MAX_STORED_BYTES; total bytes of live pastes; new pastes
+                       # get 507 once reached (checked against a total refreshed
+                       # every minute). 0 disables the cap.
 staticMaxAge: 86400    # Cache-Control max-age for static assets, seconds
 
 keyGenerator:
