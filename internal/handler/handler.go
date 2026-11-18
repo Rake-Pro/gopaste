@@ -4,17 +4,21 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"io/fs"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/rake-pro/gopaste/internal/auth"
 	"github.com/rake-pro/gopaste/internal/config"
@@ -46,6 +50,51 @@ type Handler struct {
 	assets       fs.FS
 	indexHTML    []byte
 	themeDir     string // external drop-in theme overlay dir; "" when disabled
+	stored       storedTotal
+}
+
+// storedTotal caches the live paste byte total for the maxStoredBytes cap.
+type storedTotal struct {
+	mu    sync.Mutex
+	bytes int64
+	at    time.Time // last refresh from the store; zero = never
+}
+
+// storedRefresh is how often the cached total is re-read from the store; in
+// between, accepted pastes are added to it.
+const storedRefresh = time.Minute
+
+// storeFull reports whether storing n more bytes would exceed maxStoredBytes.
+// A failed refresh keeps the previous total (fails open, as before the cap).
+func (h *Handler) storeFull(ctx context.Context, n int) bool {
+	if h.cfg.MaxStoredBytes <= 0 {
+		return false
+	}
+	h.stored.mu.Lock()
+	defer h.stored.mu.Unlock()
+	if h.stored.at.IsZero() || time.Since(h.stored.at) >= storedRefresh {
+		// Stamp before the query so a failing or aborted refresh is retried once
+		// per interval, not by every request; detach from the client's context.
+		h.stored.at = time.Now()
+		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		st, err := h.store.Stats(sctx)
+		cancel()
+		if err != nil {
+			log.Error().Err(err).Msg("stored bytes refresh")
+		} else {
+			h.stored.bytes = st.Bytes
+		}
+	}
+	return h.stored.bytes+int64(n) > int64(h.cfg.MaxStoredBytes)
+}
+
+func (h *Handler) addStored(n int) {
+	if h.cfg.MaxStoredBytes <= 0 {
+		return
+	}
+	h.stored.mu.Lock()
+	h.stored.bytes += int64(n)
+	h.stored.mu.Unlock()
 }
 
 // New builds the fully-wrapped HTTP handler. staticKeys are the preloaded
@@ -123,7 +172,58 @@ func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, "No paste exists for that id.")
 		return
 	}
-	writeJSON(w, r, http.StatusOK, map[string]string{"id": key, "content": data})
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if r.Method == http.MethodHead {
+		return
+	}
+	if err := writePasteJSON(w, key, data); err != nil {
+		log.Debug().Err(err).Msg("write paste response")
+	}
+}
+
+// jsonChunk is how much paste content writePasteJSON escapes per Write.
+const jsonChunk = 64 << 10
+
+// writePasteJSON streams {"content":...,"id":...}\n, byte-identical to
+// json.NewEncoder(w).Encode(map[string]string{...}), without building the whole
+// document in memory: JSON escaping can grow content 6x ("<" -> "\u003c").
+// Escaping is per rune, so encoding the content in rune-aligned chunks gives the
+// same bytes as encoding it whole.
+func writePasteJSON(w io.Writer, key, content string) error {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	if _, err := io.WriteString(w, `{"content":"`); err != nil {
+		return err
+	}
+	for len(content) > 0 {
+		n := min(len(content), jsonChunk)
+		// Never split a rune: if the last rune start in the final UTFMax-1
+		// bytes begins an incomplete sequence, cut before it.
+		for i := n - 1; n < len(content) && i >= n-(utf8.UTFMax-1); i-- {
+			if utf8.RuneStart(content[i]) {
+				if !utf8.FullRuneInString(content[i:n]) {
+					n = i
+				}
+				break
+			}
+		}
+		buf.Reset()
+		if err := enc.Encode(content[:n]); err != nil {
+			return err
+		}
+		b := buf.Bytes()
+		if _, err := w.Write(b[1 : len(b)-2]); err != nil { // strip `"` and `"\n`
+			return err
+		}
+		content = content[n:]
+	}
+	buf.Reset()
+	if err := enc.Encode(key); err != nil {
+		return err
+	}
+	_, err := io.WriteString(w, `","id":`+strings.TrimSuffix(buf.String(), "\n")+"}\n")
+	return err
 }
 
 func (h *Handler) handleRawGet(w http.ResponseWriter, r *http.Request) {
@@ -151,7 +251,24 @@ func (h *Handler) handlePost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusForbidden, "Cross-origin writes are not permitted.")
 		return
 	}
-	data, ok := h.readBody(w, r)
+	if h.storeFull(r.Context(), 0) {
+		writeError(w, r, http.StatusInsufficientStorage, "The paste store is full; try again later.")
+		return
+	}
+	if h.cfg.MaxLength > 0 && r.ContentLength > int64(h.cfg.MaxLength)+multipartSlack(r) {
+		writeError(w, r, http.StatusBadRequest, "Paste exceeds the maximum allowed size.")
+		return
+	}
+	ip := clientIP(r, h.cfg.TrustedProxyCount)
+	// Check the client's byte budget before reading so an over-budget client
+	// cannot make the server buffer a full-size body just to be refused.
+	remaining := h.limiter.remainingBytes(ip, time.Now())
+	if remaining >= 0 && r.ContentLength > remaining+multipartSlack(r) {
+		log.Warn().Int64("bytes", r.ContentLength).Msg("client byte budget exceeded")
+		writeError(w, r, http.StatusTooManyRequests, "You are sending data too quickly; try again shortly.")
+		return
+	}
+	data, ok := h.readBody(w, r, remaining)
 	if !ok {
 		return
 	}
@@ -160,13 +277,24 @@ func (h *Handler) handlePost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusBadRequest, "Paste exceeds the maximum allowed size.")
 		return
 	}
+	if remaining >= 0 && int64(len(data)) > remaining {
+		// Read was cut off at the budget: the body is incomplete.
+		log.Warn().Int("bytes", len(data)).Msg("client byte budget exceeded")
+		writeError(w, r, http.StatusTooManyRequests, "You are sending data too quickly; try again shortly.")
+		return
+	}
 	if strings.TrimSpace(data) == "" {
 		writeError(w, r, http.StatusBadRequest, "Paste body must not be empty.")
 		return
 	}
+	if h.storeFull(r.Context(), len(data)) {
+		log.Warn().Int("bytes", len(data)).Msg("maxStoredBytes reached")
+		writeError(w, r, http.StatusInsufficientStorage, "The paste store is full; try again later.")
+		return
+	}
 	// Byte-budget flood control: bound total accepted paste bytes per client per
 	// rate-limit window (request count alone doesn't, now that pastes can be large).
-	if !h.limiter.chargeBytes(clientIP(r, h.cfg.TrustedProxyCount), len(data), time.Now()) {
+	if !h.limiter.chargeBytes(ip, len(data), time.Now()) {
 		log.Warn().Int("bytes", len(data)).Msg("client byte budget exceeded")
 		writeError(w, r, http.StatusTooManyRequests, "You are sending data too quickly; try again shortly.")
 		return
@@ -183,6 +311,7 @@ func (h *Handler) handlePost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, "The paste could not be stored.")
 		return
 	}
+	h.addStored(len(data))
 	log.Debug().Str("key", keyHash(key)).Int("bytes", len(data)).Msg("stored paste")
 	writeJSON(w, r, http.StatusCreated, map[string]string{"id": key})
 }
@@ -213,23 +342,53 @@ func (h *Handler) writeOriginAllowed(r *http.Request) bool {
 	return corsOrigin(h.cfg.Security.CORSOrigins, origin) != ""
 }
 
+// multipartSlack is the framing overhead allowed over the content limits for
+// multipart bodies.
+func multipartSlack(r *http.Request) int64 {
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		return 1 << 20
+	}
+	return 0
+}
+
 // readBody extracts the paste content from either a multipart "data" field or
-// the raw request body, bounded to maxLength to avoid unbounded buffering.
-func (h *Handler) readBody(w http.ResponseWriter, r *http.Request) (string, bool) {
+// the raw request body, bounded to maxLength and to the client's remaining byte
+// budget (budget < 0: no budget) to avoid unbounded buffering. maxLength 0
+// means no size limit.
+func (h *Handler) readBody(w http.ResponseWriter, r *http.Request, budget int64) (string, bool) {
 	limit := int64(h.cfg.MaxLength)
-	ct := r.Header.Get("Content-Type")
-	if strings.HasPrefix(ct, "multipart/form-data") {
-		// Allow some slack over maxLength for multipart framing overhead.
-		r.Body = http.MaxBytesReader(w, r.Body, limit+(1<<20))
-		if err := r.ParseMultipartForm(limit + (1 << 20)); err != nil {
+	if limit <= 0 {
+		limit = -1
+	}
+	budgetCapped := budget >= 0 && (limit < 0 || budget < limit)
+	if budgetCapped {
+		limit = budget
+	}
+	if slack := multipartSlack(r); slack > 0 {
+		mem := int64(32 << 20) // net/http default when unlimited
+		if limit >= 0 {
+			// Allow some slack over the limit for multipart framing overhead.
+			r.Body = http.MaxBytesReader(w, r.Body, limit+slack)
+			mem = limit + slack
+		}
+		if err := r.ParseMultipartForm(mem); err != nil {
+			var tooBig *http.MaxBytesError
+			if budgetCapped && errors.As(err, &tooBig) {
+				writeError(w, r, http.StatusTooManyRequests, "You are sending data too quickly; try again shortly.")
+				return "", false
+			}
 			writeError(w, r, http.StatusBadRequest, "Paste exceeds the maximum allowed size.")
 			return "", false
 		}
 		return r.FormValue("content"), true
 	}
-	// Raw body: read one byte past the limit so the length check can detect
-	// an overrun without buffering the whole oversized payload.
-	b, err := io.ReadAll(io.LimitReader(r.Body, limit+1))
+	var body io.Reader = r.Body
+	if limit >= 0 {
+		// Read one byte past the limit so the length checks can detect an
+		// overrun without buffering the whole oversized payload.
+		body = io.LimitReader(r.Body, limit+1)
+	}
+	b, err := io.ReadAll(body)
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, "The request body could not be read.")
 		return "", false
@@ -237,10 +396,14 @@ func (h *Handler) readBody(w http.ResponseWriter, r *http.Request) (string, bool
 	return string(b), true
 }
 
+// maxKeyAttempts bounds chooseKey so an exhausted keyspace (tiny keyLength)
+// fails the request instead of looping forever.
+const maxKeyAttempts = 100
+
 // chooseKey generates keys until it finds an unused one. The existence probe
 // passes bumpExpiry=false so it never extends a live paste's TTL.
 func (h *Handler) chooseKey(ctx context.Context) (string, error) {
-	for {
+	for range maxKeyAttempts {
 		key := h.keygen.CreateKey(h.cfg.KeyLength)
 		_, found, err := h.store.Get(ctx, key, false)
 		if err != nil {
@@ -250,6 +413,7 @@ func (h *Handler) chooseKey(ctx context.Context) (string, error) {
 			return key, nil
 		}
 	}
+	return "", errors.New("no unused key after " + strconv.Itoa(maxKeyAttempts) + " attempts")
 }
 
 // handleFrontend serves embedded static assets by exact path, falling back to
@@ -425,7 +589,9 @@ func requestLogger(trustedProxies int) Middleware {
 // falls back to the direct peer (RemoteAddr).
 func clientIP(r *http.Request, trustedProxies int) string {
 	if trustedProxies > 0 {
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		// Join repeated header lines: a proxy may append its entry as a new
+		// line instead of extending the existing one.
+		if xff := strings.Join(r.Header.Values("X-Forwarded-For"), ","); xff != "" {
 			parts := strings.Split(xff, ",")
 			if idx := len(parts) - trustedProxies; idx >= 0 && idx < len(parts) {
 				if ip := strings.TrimSpace(parts[idx]); ip != "" {

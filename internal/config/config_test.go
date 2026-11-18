@@ -92,3 +92,17 @@ func TestLoginRateLimitDefault(t *testing.T) {
 		t.Fatalf("LoginRateLimit = %d, want default 10", a.LoginRateLimit)
 	}
 }
+
+func TestMaxStoredBytesEnvAndDefault(t *testing.T) {
+	if d := Defaults().MaxStoredBytes; d != 0 {
+		t.Fatalf("default maxStoredBytes = %d, want 0 (no cap)", d)
+	}
+	t.Setenv("MAX_STORED_BYTES", "5368709120")
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.MaxStoredBytes != 5368709120 {
+		t.Fatalf("MaxStoredBytes = %d, want 5368709120", cfg.MaxStoredBytes)
+	}
+}

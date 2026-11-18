@@ -180,3 +180,102 @@ func TestAdminLogout(t *testing.T) {
 		t.Fatalf("GET /admin after logout = %d, want 404", resp.StatusCode)
 	}
 }
+
+// adminDo sends method path with the given Sec-Fetch-Site and Origin headers
+// ("" = header absent) and returns the status.
+func adminDo(t *testing.T, c *http.Client, srv *httptest.Server, method, path, site, origin string) int {
+	t.Helper()
+	req, _ := http.NewRequest(method, srv.URL+path, nil)
+	if site != "" {
+		req.Header.Set("Sec-Fetch-Site", site)
+	}
+	if origin != "" {
+		req.Header.Set("Origin", origin)
+	}
+	resp, err := c.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	return resp.StatusCode
+}
+
+// State-changing admin routes refuse same-site and cross-site requests: the
+// SameSite=Lax session cookie is sent from sibling subdomains.
+func TestAdminStateChangingRoutesRequireSameOrigin(t *testing.T) {
+	srv, s := newAdminServer(t)
+	c := loggedInClient(t, srv)
+	foreign := "https://sibling.example.com"
+	for _, tc := range []struct {
+		site, origin string
+		want         int
+	}{
+		{"same-site", foreign, http.StatusForbidden},
+		{"cross-site", foreign, http.StatusForbidden},
+		{"", foreign, http.StatusForbidden},
+		{"", "null", http.StatusForbidden},
+		{"same-origin", srv.URL, http.StatusOK},
+		{"", srv.URL, http.StatusOK},
+		{"", "", http.StatusOK}, // non-browser client
+	} {
+		if got := adminDo(t, c, srv, "POST", "/admin/api/purge", tc.site, tc.origin); got != tc.want {
+			t.Errorf("purge site=%q origin=%q = %d, want %d", tc.site, tc.origin, got, tc.want)
+		}
+	}
+
+	if err := s.Set(t.Context(), "victim", "x"); err != nil {
+		t.Fatal(err)
+	}
+	if got := adminDo(t, c, srv, "DELETE", "/admin/api/pastes/victim", "same-site", foreign); got != http.StatusForbidden {
+		t.Fatalf("same-site DELETE = %d, want 403", got)
+	}
+	if got := adminDo(t, c, srv, "POST", "/admin/logout", "same-site", foreign); got != http.StatusForbidden {
+		t.Fatalf("same-site POST logout = %d, want 403", got)
+	}
+	if got := adminDo(t, c, srv, "DELETE", "/admin/api/pastes/victim", "same-origin", srv.URL); got != http.StatusOK {
+		t.Fatalf("same-origin DELETE = %d, want 200", got)
+	}
+}
+
+// A navigation from another site to GET /admin/logout must not sign a live
+// session out; it gets a confirm form. Same-origin and session-less GETs (the
+// console link, the IdP post-logout redirect) keep working.
+func TestAdminLogoutFromOtherSiteNeedsConfirm(t *testing.T) {
+	srv, _ := newAdminServer(t)
+	c := loggedInClient(t, srv)
+	for _, site := range []string{"cross-site", "same-site"} {
+		req, _ := http.NewRequest("GET", srv.URL+"/admin/logout", nil)
+		req.Header.Set("Sec-Fetch-Site", site)
+		resp, err := c.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), `method="post" action="/admin/logout"`) {
+			t.Fatalf("%s GET logout = %d %q, want confirm form", site, resp.StatusCode, body)
+		}
+		if got := adminDo(t, c, srv, "GET", "/admin", "", ""); got != http.StatusOK {
+			t.Fatalf("session gone after %s GET logout: /admin = %d", site, got)
+		}
+	}
+	// The confirm form posts same-origin and signs out.
+	if got := adminDo(t, c, srv, "POST", "/admin/logout", "same-origin", srv.URL); got != http.StatusOK {
+		t.Fatalf("confirm POST logout = %d, want 200", got)
+	}
+	if got := adminDo(t, c, srv, "GET", "/admin", "", ""); got != http.StatusNotFound {
+		t.Fatalf("/admin after logout = %d, want 404", got)
+	}
+	// Session-less cross-site GET (IdP post-logout landing) renders signed-out.
+	req, _ := http.NewRequest("GET", srv.URL+"/admin/logout", nil)
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	resp, err := c.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.Contains(string(body), "Signed out") {
+		t.Fatalf("session-less cross-site logout = %d %q", resp.StatusCode, body)
+	}
+}

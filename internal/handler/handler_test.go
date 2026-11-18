@@ -1,13 +1,21 @@
 package handler
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -473,5 +481,362 @@ func TestAdminLoginRateLimited(t *testing.T) {
 	}
 	if c := post(); c != http.StatusTooManyRequests {
 		t.Fatalf("attempt 3 = %d, want 429", c)
+	}
+}
+
+type fixedKeygen struct{ key string }
+
+func (f fixedKeygen) CreateKey(int) string    { return f.key }
+func (f fixedKeygen) EntropyBits(int) float64 { return 0 }
+
+// An exhausted keyspace must fail the request, not loop forever.
+func TestChooseKeyExhaustedKeyspace(t *testing.T) {
+	s, err := store.New(t.Context(), config.Storage{Type: "file", Path: filepath.Join(t.TempDir(), "data")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	if err := s.Set(t.Context(), "taken", "x"); err != nil {
+		t.Fatal(err)
+	}
+	h := &Handler{store: s, keygen: fixedKeygen{key: "taken"}}
+	done := make(chan error, 1)
+	go func() { _, err := h.chooseKey(t.Context()); done <- err }()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("chooseKey returned a key from an exhausted keyspace")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("chooseKey did not give up on an exhausted keyspace")
+	}
+}
+
+// recordingWriter is a ResponseWriter that records the largest single Write.
+type recordingWriter struct {
+	hdr      http.Header
+	buf      bytes.Buffer
+	maxWrite int
+}
+
+func (w *recordingWriter) Header() http.Header { return w.hdr }
+func (w *recordingWriter) WriteHeader(int)     {}
+func (w *recordingWriter) Write(b []byte) (int, error) {
+	w.maxWrite = max(w.maxWrite, len(b))
+	return w.buf.Write(b)
+}
+
+// The streamed paste JSON must be byte-identical to what json.Encoder produced
+// for the whole document, including at chunk boundaries inside multi-byte runes
+// and around invalid UTF-8.
+func TestWritePasteJSONMatchesEncoder(t *testing.T) {
+	pad := strings.Repeat("a", jsonChunk-1)
+	cases := map[string]string{
+		"empty":     "",
+		"plain":     "hello world",
+		"escapes":   "<script>&\"\\\n\t\x00\x01\x1f\u2028\u2029",
+		"lt-big":    strings.Repeat("<", 3*jsonChunk+7),
+		"ctrl-big":  strings.Repeat("\x01", 2*jsonChunk+1),
+		"rune-edge": pad + "\u20ac" + pad + "\U0001F600" + pad + "\u00e9x",
+		"invalid":   pad + "\xe2\x82" + pad + "\xff\xfe" + strings.Repeat("\x80", 9) + pad + "\xf0\x9f\x98",
+	}
+	for name, content := range cases {
+		var want bytes.Buffer
+		if err := json.NewEncoder(&want).Encode(map[string]string{"id": "k<1", "content": content}); err != nil {
+			t.Fatal(err)
+		}
+		w := &recordingWriter{hdr: http.Header{}}
+		if err := writePasteJSON(w, "k<1", content); err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(w.buf.Bytes(), want.Bytes()) {
+			t.Errorf("%s: streamed JSON differs from json.Encoder output", name)
+		}
+		if w.maxWrite > 6*jsonChunk+16 {
+			t.Errorf("%s: single write of %d bytes, want <= one escaped chunk", name, w.maxWrite)
+		}
+	}
+}
+
+// GET /api/pastes/{id} streams: a paste that escapes 6x is never materialised
+// as one response buffer.
+func TestGetPasteStreamsEscapedContent(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.RateLimit = config.RateLimit{}
+	s, err := store.New(t.Context(), config.Storage{Type: "file", Path: filepath.Join(t.TempDir(), "data")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	gen, _ := keygen.New("random", "")
+	am, _ := auth.New(t.Context(), cfg.Auth)
+	h, err := New(cfg, s, gen, am, map[string]bool{}, web.Static())
+	if err != nil {
+		t.Fatal(err)
+	}
+	const n = 2 << 20
+	content := strings.Repeat("<", n)
+	if err := s.Set(t.Context(), "big", content); err != nil {
+		t.Fatal(err)
+	}
+	w := &recordingWriter{hdr: http.Header{}}
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/api/pastes/big", nil))
+	if w.maxWrite > 1<<20 {
+		t.Fatalf("largest write %d bytes; response is buffered, not streamed", w.maxWrite)
+	}
+	var got struct{ ID, Content string }
+	if err := json.Unmarshal(w.buf.Bytes(), &got); err != nil || got.ID != "big" || got.Content != content {
+		t.Fatalf("decoded id=%q len=%d err=%v", got.ID, len(got.Content), err)
+	}
+}
+
+// countingReader counts the bytes the server pulled from a request body.
+type countingReader struct {
+	r io.Reader
+	n int
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	k, err := c.r.Read(p)
+	c.n += k
+	return k, err
+}
+
+// The byte budget is enforced before and while reading the upload: an
+// over-budget client cannot make the server buffer a full-size body.
+func TestByteBudgetEnforcedBeforeRead(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.MaxLength = 16 << 20
+	cfg.RateLimit = config.RateLimit{Every: 60000, MaxBytes: 1 << 20}
+	srv := newTestServerCfg(t, cfg)
+	h := srv.Config.Handler
+
+	send := func(size int, knownLength bool) (int, int) {
+		body := &countingReader{r: strings.NewReader(strings.Repeat("A", size))}
+		r := httptest.NewRequest("POST", "/api/pastes", body)
+		if knownLength {
+			r.ContentLength = int64(size)
+		}
+		r.RemoteAddr = "203.0.113.7:1234"
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w.Code, body.n
+	}
+	if code, _ := send(900<<10, true); code != http.StatusCreated {
+		t.Fatalf("first post = %d, want 201", code)
+	}
+	if code, read := send(15<<20, true); code != http.StatusTooManyRequests || read != 0 {
+		t.Fatalf("over-budget post with Content-Length: status=%d read=%d, want 429 and no read", code, read)
+	}
+	// Chunked upload (no Content-Length): the read stops just past the budget.
+	if code, read := send(15<<20, false); code != http.StatusTooManyRequests || read > 200<<10 {
+		t.Fatalf("over-budget chunked post: status=%d read=%d, want 429 and read <= remaining budget", code, read)
+	}
+	// Within budget still works.
+	if code, _ := send(100<<10, false); code != http.StatusCreated {
+		t.Fatalf("in-budget chunked post = %d, want 201", code)
+	}
+}
+
+// A multipart upload cut off at the client's byte budget is a 429, not a 400.
+func TestByteBudgetMultipart(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.MaxLength = 16 << 20
+	cfg.RateLimit = config.RateLimit{Every: 60000, MaxBytes: 1 << 20}
+	srv := newTestServerCfg(t, cfg)
+
+	postForm := func(size int) int {
+		var buf bytes.Buffer
+		mw := multipart.NewWriter(&buf)
+		_ = mw.WriteField("content", strings.Repeat("A", size))
+		_ = mw.Close()
+		// Hide the length so only the read bound applies.
+		req, _ := http.NewRequest("POST", srv.URL+"/api/pastes", io.MultiReader(&buf))
+		req.Header.Set("Content-Type", mw.FormDataContentType())
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if code := postForm(100); code != http.StatusCreated {
+		t.Fatalf("small multipart = %d, want 201", code)
+	}
+	if code := postForm(4 << 20); code != http.StatusTooManyRequests {
+		t.Fatalf("over-budget multipart = %d, want 429", code)
+	}
+}
+
+// maxLength 0 is documented as unlimited; raw bodies must not be cut to 1 byte.
+func TestMaxLengthZeroIsUnlimited(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.RateLimit = config.RateLimit{}
+	cfg.MaxLength = 0
+	srv := newTestServerCfg(t, cfg)
+	payload := strings.Repeat("z", 5000)
+	code, body := post(t, srv.URL, payload)
+	if code != http.StatusCreated {
+		t.Fatalf("POST = %d %s", code, body)
+	}
+	if code, _, raw := get(t, srv.URL+"/api/pastes/"+extractKey(body)+"/raw"); code != 200 || raw != payload {
+		t.Fatalf("raw = %d len=%d, want the full %d bytes", code, len(raw), len(payload))
+	}
+}
+
+// maxStoredBytes refuses new pastes once the live total would exceed it; the
+// default 0 leaves storage uncapped.
+func TestMaxStoredBytes(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.RateLimit = config.RateLimit{}
+	cfg.MaxStoredBytes = len("about content") + 20
+	srv := newTestServerCfg(t, cfg)
+	for i, tc := range []struct {
+		size int
+		want int
+	}{
+		{15, http.StatusCreated},
+		{10, http.StatusInsufficientStorage},
+		{5, http.StatusCreated}, // exactly at the cap
+		{1, http.StatusInsufficientStorage},
+	} {
+		if code, body := post(t, srv.URL, strings.Repeat("s", tc.size)); code != tc.want {
+			t.Fatalf("post %d (%d bytes) = %d %s, want %d", i, tc.size, code, body, tc.want)
+		}
+	}
+}
+
+// IPv6 clients share one bucket per /64; IPv4 and other /64s stay separate.
+func TestRateLimiterKeysIPv6BySlash64(t *testing.T) {
+	l := newRateLimiter(config.RateLimit{TotalRequests: 1, Every: 60000}, 0)
+	now := time.Unix(0, 0)
+	allowed := 0
+	for i := range 1000 {
+		if l.allow(fmt.Sprintf("2001:db8:1:2::%x", i+1), now) {
+			allowed++
+		}
+	}
+	if allowed != 1 {
+		t.Fatalf("%d of 1000 requests from one /64 allowed, want 1", allowed)
+	}
+	if !l.allow("2001:db8:1:3::1", now) {
+		t.Fatal("a different /64 must have its own bucket")
+	}
+	if !l.allow("[2001:db8:9::1]", now) || l.allow("2001:db8:9::2", now) {
+		t.Fatal("bracketed RemoteAddr form must share the /64 bucket")
+	}
+	if !l.allow("192.0.2.1", now) || !l.allow("192.0.2.2", now) {
+		t.Fatal("IPv4 addresses must keep per-address buckets")
+	}
+	if l.allow("::ffff:192.0.2.1", now) {
+		t.Fatal("IPv4-mapped IPv6 must share the IPv4 bucket")
+	}
+}
+
+// The full-map sweep runs at most once per window, not on every new client.
+func TestRateLimiterSweepOncePerWindow(t *testing.T) {
+	w := time.Minute
+	l := newRateLimiter(config.RateLimit{TotalRequests: 10, Every: int(w / time.Millisecond)}, 0)
+	t0 := time.Unix(0, 0)
+	for i := range 1000 {
+		l.allow(fmt.Sprintf("client-%d", i), t0)
+	}
+	for i := range 100 {
+		l.allow(fmt.Sprintf("198.51.100.%d", i), t0.Add(w/2)) // crosses 1024: first sweep
+	}
+	// t0 windows have expired, but the last sweep was under a window ago.
+	l.allow("203.0.113.1", t0.Add(w+time.Millisecond))
+	if got := len(l.windows); got != 1101 {
+		t.Fatalf("map size %d, want 1101 (no second sweep within one window)", got)
+	}
+	// A window after the last sweep, the next new client sweeps expired entries.
+	l.allow("203.0.113.2", t0.Add(w/2+w))
+	if got := len(l.windows); got != 102 {
+		t.Fatalf("map size %d, want 102 after the periodic sweep", got)
+	}
+}
+
+// Repeated X-Forwarded-For header lines are treated as one list, so a proxy
+// that appends its own line cannot be shadowed by a client-sent first line.
+func TestClientIPJoinsForwardedForLines(t *testing.T) {
+	r := httptest.NewRequest("GET", "/", nil)
+	r.RemoteAddr = "192.0.2.10:443"
+	r.Header.Add("X-Forwarded-For", "198.51.100.66")
+	r.Header.Add("X-Forwarded-For", "203.0.113.5")
+	if got := clientIP(r, 1); got != "203.0.113.5" {
+		t.Fatalf("clientIP = %q, want the proxy-appended 203.0.113.5", got)
+	}
+}
+
+// Concurrent use of the limiter (run under -race).
+func TestRateLimiterConcurrent(t *testing.T) {
+	l := newRateLimiter(config.RateLimit{TotalRequests: 5, Every: 1, MaxBytes: 100}, 0)
+	var wg sync.WaitGroup
+	for g := range 8 {
+		wg.Go(func() {
+			for i := range 2000 {
+				ip := fmt.Sprintf("2001:db8:%x::%x", g, i)
+				now := time.Now()
+				l.allow(ip, now)
+				l.remainingBytes(ip, now)
+				l.chargeBytes(ip, 10, now)
+			}
+		})
+	}
+	wg.Wait()
+}
+
+// A rune that ends exactly at the chunk boundary, followed by a stray
+// continuation byte, must not be split by the chunking.
+func TestWritePasteJSONRuneAtChunkBoundary(t *testing.T) {
+	content := strings.Repeat("a", jsonChunk-4) + "\U0001F600" + "\x80" + "tail"
+	var want, got bytes.Buffer
+	if err := json.NewEncoder(&want).Encode(map[string]string{"id": "k", "content": content}); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePasteJSON(&got, "k", content); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(want.Bytes(), got.Bytes()) {
+		t.Fatal("streamed JSON differs from the encoder output")
+	}
+}
+
+type failingStats struct {
+	store.Store
+	calls atomic.Int64
+}
+
+func (s *failingStats) Stats(context.Context) (store.Stats, error) {
+	s.calls.Add(1)
+	return store.Stats{}, errors.New("db down")
+}
+
+// A failing stored-bytes refresh is retried once per interval, not per request.
+func TestStoreFullFailedRefreshNotRetriedPerRequest(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.MaxStoredBytes = 1 << 30
+	fs := &failingStats{}
+	h := &Handler{cfg: cfg, store: fs}
+	for range 50 {
+		h.storeFull(t.Context(), 0)
+	}
+	if got := fs.calls.Load(); got != 1 {
+		t.Fatalf("Stats ran %d times, want 1", got)
+	}
+}
+
+// A body over maxLength is a 400 even when it also exceeds the byte budget.
+func TestOversizePasteIs400NotBudget429(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.MaxLength = 1 << 20
+	cfg.RateLimit = config.RateLimit{Every: 60000, MaxBytes: 512 << 10}
+	srv := newTestServerCfg(t, cfg)
+	r := httptest.NewRequest("POST", "/api/pastes", strings.NewReader(strings.Repeat("A", 2<<20)))
+	r.RemoteAddr = "203.0.113.9:1234"
+	w := httptest.NewRecorder()
+	srv.Config.Handler.ServeHTTP(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", w.Code)
 	}
 }

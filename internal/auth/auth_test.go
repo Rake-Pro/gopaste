@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,8 @@ import (
 	"time"
 
 	"github.com/rake-pro/gopaste/internal/config"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -135,6 +138,30 @@ func TestLocalLogin(t *testing.T) {
 	m.LoginSubmit(rr, req)
 	if rr.Code != http.StatusUnauthorized {
 		t.Fatalf("bad login = %d, want 401", rr.Code)
+	}
+}
+
+// A password typed into the username field must not end up in the logs.
+func TestLocalLoginUnknownUserNotLogged(t *testing.T) {
+	m := localManager(t)
+	var buf bytes.Buffer
+	prev := log.Logger
+	log.Logger = zerolog.New(&buf)
+	t.Cleanup(func() { log.Logger = prev })
+
+	form := url.Values{"username": {"hunter2-typed-here"}, "password": {"x"}}
+	req := httptest.NewRequest(http.MethodPost, "/admin/login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	m.LoginSubmit(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("unknown user login = %d, want 401", rr.Code)
+	}
+	if strings.Contains(buf.String(), "hunter2-typed-here") {
+		t.Fatalf("submitted username leaked to logs: %s", buf.String())
+	}
+	if !strings.Contains(buf.String(), "admin login rejected") {
+		t.Fatalf("rejection not logged: %s", buf.String())
 	}
 }
 

@@ -74,6 +74,7 @@ auth for listing and deleting pastes; setup and the config contract are in
 | `PORT` / `HOST` / `LOG_LEVEL` | server bind + log level |
 | `TRUSTED_PROXY_COUNT` | number of trusted reverse proxies in front (see below) |
 | `MAX_LENGTH` | max paste size in bytes (default 150 MB; `0` = unlimited) |
+| `MAX_STORED_BYTES` | total bytes of live pastes before new pastes get 507 (default `0` = no cap) |
 | `RATE_LIMIT_MAX_BYTES` | accepted paste bytes per client per window (default 600 MB; `0` = off) |
 | `THEME_DEFAULT` | theme for first-time visitors (default `rake`) |
 | `THEME_FORCED` | lock this theme and hide the switcher (default unset) |

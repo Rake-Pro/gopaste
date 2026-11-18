@@ -2,6 +2,8 @@ package handler
 
 import (
 	"net/http"
+	"net/netip"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,8 +20,9 @@ type rateLimiter struct {
 	window         time.Duration
 	trustedProxies int
 
-	mu      sync.Mutex
-	windows map[string]*window
+	mu        sync.Mutex
+	windows   map[string]*window
+	lastSweep time.Time
 }
 
 type window struct {
@@ -59,9 +62,30 @@ func (l *rateLimiter) middleware(next http.Handler) http.Handler {
 	})
 }
 
+// limiterKey is the bucket key for a client address. IPv6 clients share one
+// bucket per /64 (a single host is routinely handed a whole /64, so per-address
+// buckets would let it rotate past every limit); IPv4 and unparsable values are
+// used as-is.
+func limiterKey(ip string) string {
+	addr, err := netip.ParseAddr(strings.Trim(ip, "[]"))
+	if err != nil {
+		return ip
+	}
+	addr = addr.Unmap()
+	if !addr.Is6() {
+		return addr.String()
+	}
+	p, err := addr.WithZone("").Prefix(64)
+	if err != nil {
+		return ip
+	}
+	return p.String()
+}
+
 // getWindow returns the client's current window, rolling it over when expired.
 // Caller must hold l.mu.
 func (l *rateLimiter) getWindow(ip string, now time.Time) *window {
+	ip = limiterKey(ip)
 	win, ok := l.windows[ip]
 	if !ok || now.After(win.reset) {
 		win = &window{reset: now.Add(l.window)}
@@ -101,12 +125,27 @@ func (l *rateLimiter) chargeBytes(ip string, n int, now time.Time) bool {
 	return true
 }
 
+// remainingBytes returns how many more paste bytes the client may send in its
+// current window, or -1 when the byte limit is disabled. chargeBytes stays the
+// authoritative check; this only lets the handler stop reading early.
+func (l *rateLimiter) remainingBytes(ip string, now time.Time) int64 {
+	if l.maxBytes <= 0 || l.window <= 0 {
+		return -1
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return int64(max(l.maxBytes-l.getWindow(ip, now).bytes, 0))
+}
+
 // sweep drops expired windows. Called opportunistically on new-window creation
-// to bound map growth without a background goroutine.
+// to bound map growth without a background goroutine. The full scan runs at
+// most once per window, so a flood of new clients does not rescan the whole map
+// (under the lock every request takes) for each new address.
 func (l *rateLimiter) sweep(now time.Time) {
-	if len(l.windows) < 1024 {
+	if len(l.windows) < 1024 || now.Sub(l.lastSweep) < l.window {
 		return
 	}
+	l.lastSweep = now
 	for ip, win := range l.windows {
 		if now.After(win.reset) {
 			delete(l.windows, ip)
